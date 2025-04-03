@@ -1,0 +1,5 @@
+*.db
+photos
+photos.exe
+
+curl
