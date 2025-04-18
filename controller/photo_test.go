@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/follow1123/photos/application"
+	"github.com/follow1123/photos/config"
 	"github.com/follow1123/photos/middleware"
 	"github.com/follow1123/photos/mocks"
 	"github.com/follow1123/photos/model/dto"
@@ -32,7 +33,9 @@ func (s *PhotoAPISuite) SetupSuite() {
 	r := gin.Default()
 	zapLogger := zap.NewExample().Sugar()
 	r.Use(middleware.GlobalErrorHandler(zapLogger))
-	appCtx := application.NewAppContext(zapLogger, nil)
+
+	cfg := config.NewConfig(":8080")
+	appCtx := application.NewAppContext(zapLogger, cfg)
 
 	photoCtl := NewPhotoController(appCtx, nil)
 	r.GET(PHOTO_API_GETBYID, photoCtl.GetPhotoById)
@@ -53,7 +56,7 @@ func (s *PhotoAPISuite) SetupTest() {
 func (s *PhotoAPISuite) TestGetByIdSuccess() {
 	expectedCode, expectedData := http.StatusOK, dto.PhotoDto{
 		Desc: "2343214",
-		Path: "123412",
+		Uri:  "123412",
 	}
 	s.serv.On("GetPhotoById", mock.Anything).Return(&expectedData, nil)
 
@@ -92,7 +95,7 @@ func (s *PhotoAPISuite) TestGetByIdFailure() {
 func (s *PhotoAPISuite) TestDeletePhotoSuccess() {
 	expectedCode, expectedData := http.StatusOK, dto.PhotoDto{
 		Desc: "2343214",
-		Path: "123412",
+		Uri:  "123412",
 	}
 	s.serv.On("DeletePhoto", mock.Anything).Return(&expectedData, nil)
 

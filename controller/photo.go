@@ -1,7 +1,11 @@
 package controller
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/follow1123/photos/application"
 	"github.com/follow1123/photos/common"
@@ -69,21 +73,34 @@ func (ctl *photoController) PhotoList(c *gin.Context) {
 }
 
 func (ctl *photoController) CreatePhoto(c *gin.Context) {
-	data := &dto.PhotoDto{Operate: dto.PHOTO_OPE_CREATE}
-	var err error
+	metaData := c.PostForm("metaData")
 
-	if err = c.BindJSON(&data); err != nil {
+	ctl.logger.Info("meta data: %s", metaData)
+	var metaDatas []*dto.PhotoDto
+	if err := json.Unmarshal([]byte(metaData), &metaDatas); err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("invalid meta data")).SetType(gin.ErrorTypePublic)
 		return
 	}
-	if data, err = ctl.service.CreatePhoto(data); err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
+	for _, meta := range metaDatas {
+		ctl.logger.Info("upload id: %d", meta.UploadID)
+		fh, err := c.FormFile(fmt.Sprintf("file_%d", meta.UploadID))
+		missingFile := errors.Is(err, http.ErrMissingFile)
+		if missingFile {
+			ctl.logger.Info("missing file, upload id: %d", meta.UploadID)
+			uri := strings.TrimSpace(meta.Uri)
+			if uri == "" {
+				c.AbortWithError(http.StatusBadRequest, errors.New("uri must not empty when not upload file")).SetType(gin.ErrorTypePublic)
+				return
+			}
+			continue
+		}
+		if err != nil {
+			c.AbortWithError(http.StatusBadRequest, errors.New("upload a bad file")).SetType(gin.ErrorTypePublic)
+			return
+		}
+		meta.MultipartFile = fh
 	}
-	if data == nil {
-		c.AbortWithError(http.StatusNotFound, common.ErrDataNotFound).SetType(gin.ErrorTypePublic)
-		return
-	}
-	c.JSON(http.StatusOK, data)
+	c.JSON(http.StatusOK, ctl.service.CreatePhoto(metaDatas))
 }
 
 func (ctl *photoController) UpdatePhoto(c *gin.Context) {

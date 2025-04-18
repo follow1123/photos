@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/follow1123/photos/application"
+	"github.com/follow1123/photos/config"
 	"github.com/follow1123/photos/logger"
 	"github.com/follow1123/photos/model"
 	"github.com/follow1123/photos/model/dto"
@@ -38,12 +39,15 @@ func (s *PhotoServiceSuite) SetupSuite() {
 		baseLogger.Fatal("cannot connect to sqlite database")
 	}
 
+	cfg := config.NewConfig("")
+
 	zapLogger := zap.NewExample().Sugar()
-	appCtx := application.NewAppContext(zapLogger, db)
-	serv := NewPhotoService(appCtx)
+	appCtx := application.NewAppContext(zapLogger, cfg)
+	serv := NewPhotoService(appCtx, db)
 	s.serv = serv
 	s.db = db
 }
+
 func (s *PhotoServiceSuite) TearDownSuite() {
 	session, _ := s.db.DB()
 	session.Close()
@@ -67,7 +71,7 @@ func (s *PhotoServiceSuite) TestGetByIdSuccess() {
 	expectedData := &dto.PhotoDto{
 		ID:        1,
 		Desc:      "2343214",
-		Path:      "123412",
+		Uri:       "123412",
 		Size:      102400,
 		PhotoDate: time.Now(),
 	}
@@ -90,7 +94,7 @@ func (s *PhotoServiceSuite) TestDeletePhotoSuccess() {
 	expectedData := &dto.PhotoDto{
 		ID:        1,
 		Desc:      "2343214",
-		Path:      "123412",
+		Uri:       "123412",
 		Size:      102400,
 		PhotoDate: time.Now(),
 	}

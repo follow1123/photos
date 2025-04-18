@@ -10,8 +10,9 @@ type Photo struct {
 	gorm.Model
 	Desc       string
 	Type       sql.NullString
-	Path       string
+	Uri        string
 	Size       sql.NullInt64
+	Sum        string
 	Resolution sql.NullString
 	PhotoDate  sql.NullTime
 }

@@ -2,6 +2,7 @@ package dto
 
 import (
 	"database/sql"
+	"mime/multipart"
 	"time"
 
 	"github.com/follow1123/photos/model"
@@ -13,20 +14,24 @@ const (
 )
 
 type PhotoDto struct {
-	Operate    uint      `json:"-"`
-	ID         uint      `json:"id" uri:"id" binding:"required_if=Operate 0,omitempty,min=1"`
-	Desc       string    `json:"desc" binding:"required_if=Operate 1"`
-	Type       string    `json:"type"`
-	Path       string    `json:"path" binding:"required_if=Operate 1"`
-	Size       int64     `json:"size"`
-	Resolution string    `json:"resolution"`
-	PhotoDate  time.Time `json:"photoDate" time_format:"2006-01-02 15:04:05"`
+	Operate       uint                  `json:"-"`
+	UploadID      uint                  `json:"uploadId"`
+	ID            uint                  `json:"id" uri:"id" binding:"required_if=Operate 0,omitempty,min=1"`
+	MultipartFile *multipart.FileHeader `json:"-"`
+	Desc          string                `json:"desc" form:"desc" binding:"required_if=Operate 1"`
+	Type          string                `json:"type"`
+	Uri           string                `json:"uri" form:"uri"`
+	Size          int64                 `json:"size"`
+	Sum           string                `json:"-"`
+	Resolution    string                `json:"resolution"`
+	PhotoDate     time.Time             `json:"photoDate" time_format:"2006-01-02 15:04:05"`
 }
 
 func (p *PhotoDto) Update(photo *model.Photo) {
 	p.ID = photo.ID
 	p.Desc = photo.Desc
-	p.Path = photo.Path
+	p.Uri = photo.Uri
+	p.Sum = photo.Sum
 	if photo.Type.Valid {
 		p.Type = photo.Type.String
 	}
@@ -70,7 +75,7 @@ func (p *PhotoDto) UpdateToModel(photo *model.Photo) {
 }
 
 func (p *PhotoDto) ToModel() *model.Photo {
-	photo := model.Photo{Desc: p.Desc, Path: p.Path}
+	photo := model.Photo{Desc: p.Desc, Uri: p.Uri, Sum: p.Sum}
 	photo.Type = sql.NullString{}
 	if p.Type != "" {
 		photo.Type.String = p.Type

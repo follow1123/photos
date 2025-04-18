@@ -33,16 +33,13 @@ func (m *PhotoService) PhotoList() (*[]dto.PhotoDto, error) {
 	return r0, r1
 }
 
-func (m *PhotoService) CreatePhoto(photoDto *dto.PhotoDto) (*dto.PhotoDto, error) {
+func (m *PhotoService) CreatePhoto(photoDto []*dto.PhotoDto) []uint {
 	ret := m.Called(photoDto)
-
-	var r0 *dto.PhotoDto
+	var r0 []uint
 	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(*dto.PhotoDto)
+		r0 = ret.Get(0).([]uint)
 	}
-
-	r1 := ret.Error(1)
-	return r0, r1
+	return r0
 }
 
 func (m *PhotoService) UpdatePhoto(photoDto *dto.PhotoDto) (*dto.PhotoDto, error) {

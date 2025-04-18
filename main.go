@@ -1,7 +1,10 @@
 package main
 
 import (
+	"path/filepath"
+
 	"github.com/follow1123/photos/application"
+	"github.com/follow1123/photos/config"
 	"github.com/follow1123/photos/logger"
 	"github.com/follow1123/photos/middleware"
 	"github.com/follow1123/photos/migration"
@@ -12,8 +15,11 @@ import (
 )
 
 func main() {
+
+	cfg := config.NewConfig(":8080")
+
 	baseLogger := logger.InitBaseLogger()
-	db, err := gorm.Open(sqlite.Open("photos.db"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(filepath.Join(cfg.GetPrefixPath(), "photos.db")), &gorm.Config{
 		Logger: logger.NewGormLogger(baseLogger),
 	})
 	if err != nil {
@@ -22,7 +28,8 @@ func main() {
 
 	migration.InitOrMigration(db, baseLogger)
 
-	appCtx := application.NewAppContext(baseLogger, db)
+
+	appCtx := application.NewAppContext(baseLogger, cfg)
 
 	r := gin.New()
 	// middleware
@@ -30,7 +37,7 @@ func main() {
 	r.Use(middleware.GlobalErrorHandler(baseLogger))
 
 	// router
-	router.Init(r, appCtx, baseLogger)
+	router.Init(r, appCtx, baseLogger, db)
 
-	r.Run()
+	r.Run(cfg.GetAddr())
 }

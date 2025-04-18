@@ -6,14 +6,15 @@ import (
 	"github.com/follow1123/photos/service"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 const LOG_PREFIX = "[ROUTER]"
 
-func Init(r *gin.Engine, appCtx application.AppContext, baseLogger *zap.SugaredLogger) {
+func Init(r *gin.Engine, appCtx application.AppContext, baseLogger *zap.SugaredLogger, db *gorm.DB) {
 	baseLogger.Debugf("%s init router", LOG_PREFIX)
 
-	photoCtl := controller.NewPhotoController(appCtx,  service.NewPhotoService(appCtx))
+	photoCtl := controller.NewPhotoController(appCtx, service.NewPhotoService(appCtx, db))
 	r.GET(controller.PHOTO_API_GETBYID, photoCtl.GetPhotoById)
 	r.GET(controller.PHOTO_API_LIST, photoCtl.PhotoList)
 	r.POST(controller.PHOTO_API_CREATE, photoCtl.CreatePhoto)
