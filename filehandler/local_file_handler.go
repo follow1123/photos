@@ -16,18 +16,18 @@ import (
 const LOCAL_FILE_PREFIX = "local://"
 
 type LocalFileHandler struct {
+	logger.AppLogger
 	filesRoot string
-	logger logger.AppLogger
 }
 
-func NewLocalFileHandler(filesPath string, logger logger.AppLogger) *LocalFileHandler {
-	return &LocalFileHandler{filesRoot: filesPath, logger: logger}
+func NewLocalFileHandler(filesPath string) *LocalFileHandler {
+	return &LocalFileHandler{filesRoot: filesPath}
 }
 
 func (l *LocalFileHandler) checkUri(uri string) (string, error) {
 	if strings.HasPrefix(uri, LOCAL_FILE_PREFIX) {
 		msg := fmt.Sprintf("invalid local file uri: %s", uri)
-		l.logger.Error(msg)
+		// l.logger.Error(msg)
 		return "", errors.New(msg)
 	}
 	return strings.TrimPrefix(uri, LOCAL_FILE_PREFIX), nil
@@ -48,7 +48,7 @@ func (l *LocalFileHandler) Save(_ string, src io.Reader) (string, error) {
 	filePath := l.nextFilePath()
 	err := os.MkdirAll(filepath.Dir(filePath), 0755)
 	if err != nil {
-		l.logger.Error("cannot create next files directory: %s", filepath.Dir(filePath))
+		// l.logger.Error("cannot create next files directory: %s", filepath.Dir(filePath))
 		return "", nil
 	}
 

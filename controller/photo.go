@@ -32,13 +32,13 @@ type PhotoController interface {
 }
 
 type photoController struct {
-	logger  logger.AppLogger
+	logger.AppLogger
 	ctx     application.AppContext
 	service service.PhotoService
 }
 
 func NewPhotoController(ctx application.AppContext, service service.PhotoService) PhotoController {
-	return &photoController{logger: ctx.GetLogger(), ctx: ctx, service: service}
+	return &photoController{ctx: ctx, service: service, AppLogger: *ctx.GetLogger()}
 }
 
 func (ctl *photoController) GetPhotoById(c *gin.Context) {
@@ -75,18 +75,18 @@ func (ctl *photoController) PhotoList(c *gin.Context) {
 func (ctl *photoController) CreatePhoto(c *gin.Context) {
 	metaData := c.PostForm("metaData")
 
-	ctl.logger.Info("meta data: %s", metaData)
+	ctl.Info("meta data: %s", metaData)
 	var metaDatas []*dto.PhotoDto
 	if err := json.Unmarshal([]byte(metaData), &metaDatas); err != nil {
 		c.AbortWithError(http.StatusBadRequest, errors.New("invalid meta data")).SetType(gin.ErrorTypePublic)
 		return
 	}
 	for _, meta := range metaDatas {
-		ctl.logger.Info("upload id: %d", meta.UploadID)
+		ctl.Info("upload id: %d", meta.UploadID)
 		fh, err := c.FormFile(fmt.Sprintf("file_%d", meta.UploadID))
 		missingFile := errors.Is(err, http.ErrMissingFile)
 		if missingFile {
-			ctl.logger.Info("missing file, upload id: %d", meta.UploadID)
+			ctl.Info("missing file, upload id: %d", meta.UploadID)
 			uri := strings.TrimSpace(meta.Uri)
 			if uri == "" {
 				c.AbortWithError(http.StatusBadRequest, errors.New("uri must not empty when not upload file")).SetType(gin.ErrorTypePublic)

@@ -10,11 +10,11 @@ type AppContext struct {
 	mock.Mock
 }
 
-func (m *AppContext) GetLogger() logger.AppLogger {
+func (m *AppContext) GetLogger() *logger.AppLogger {
 	ret := m.Called()
-	var r0 logger.AppLogger
+	var r0 *logger.AppLogger
 	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(logger.AppLogger)
+		r0 = ret.Get(0).(*logger.AppLogger)
 	}
 	return r0
 }

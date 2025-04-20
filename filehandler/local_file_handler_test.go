@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/follow1123/photos/logger"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -14,7 +13,6 @@ type LocalFileHandlerTestSuite struct {
 	suite.Suite
 	handler *LocalFileHandler
 	dataDir string
-	logger logger.AppLogger
 	testFilePath string
 }
 
@@ -35,9 +33,7 @@ func (s *LocalFileHandlerTestSuite) SetupSuite() {
 	_, err = f.WriteString("1234321uqweripwejifqwe")
 	s.Nil(err, "test file write failed")
 
-	baseLogger := logger.InitBaseLogger()
-	s.logger = logger.NewAppLogger(baseLogger)
-	s.handler = NewLocalFileHandler(s.dataDir, s.logger)
+	s.handler = NewLocalFileHandler(s.dataDir)
 }
 
 func (s *LocalFileHandlerTestSuite) TearDownSuite() {

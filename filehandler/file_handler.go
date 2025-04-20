@@ -3,8 +3,6 @@ package filehandler
 import (
 	"io"
 	"strings"
-
-	"github.com/follow1123/photos/logger"
 )
 
 type FileHandler interface {
@@ -16,12 +14,6 @@ type FileHandler interface {
 
 type FileHandlerFactory struct {
 	localFileHandler *LocalFileHandler
-}
-
-func NewFileHandlerFactory(filesPath string, logger logger.AppLogger) *FileHandlerFactory {
-	return &FileHandlerFactory{
-		localFileHandler: NewLocalFileHandler(filesPath, logger),
-	}
 }
 
 func (f *FileHandlerFactory) GetHandler(uri string) FileHandler {
