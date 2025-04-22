@@ -1,9 +1,10 @@
 package mocks
 
 import (
+	"github.com/follow1123/photos/config"
+	imagemanager "github.com/follow1123/photos/imageManager"
 	"github.com/follow1123/photos/logger"
 	"github.com/stretchr/testify/mock"
-	"gorm.io/gorm"
 )
 
 type AppContext struct {
@@ -18,12 +19,23 @@ func (m *AppContext) GetLogger() *logger.AppLogger {
 	}
 	return r0
 }
-func (m *AppContext) GetDB() *gorm.DB {
+
+func (m *AppContext) GetConfig() config.Config {
 	ret := m.Called()
 
-	var r0 *gorm.DB
+	var r0 config.Config
 	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(*gorm.DB)
+		r0 = ret.Get(0).(config.Config)
+	}
+	return r0
+}
+
+func (m *AppContext) GetImageManager() *imagemanager.ImageManager {
+	ret := m.Called()
+
+	var r0 *imagemanager.ImageManager
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*imagemanager.ImageManager)
 	}
 	return r0
 }

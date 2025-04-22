@@ -1,6 +1,8 @@
 package mocks
 
 import (
+	"mime/multipart"
+
 	"github.com/follow1123/photos/model/dto"
 	"github.com/stretchr/testify/mock"
 )
@@ -33,11 +35,12 @@ func (m *PhotoService) PhotoList() (*[]dto.PhotoDto, error) {
 	return r0, r1
 }
 
-func (m *PhotoService) CreatePhoto(photoDto []*dto.PhotoDto) []uint {
-	ret := m.Called(photoDto)
-	var r0 []uint
+
+func (m *PhotoService) CreatePhoto(photoDtos []*dto.PhotoDto, uploadFiles map[uint]*multipart.FileHeader) []dto.CreatePhotoFailedResult {
+	ret := m.Called(photoDtos, uploadFiles)
+	var r0 []dto.CreatePhotoFailedResult
 	if ret.Get(0) != nil {
-		r0 = ret.Get(0).([]uint)
+		r0 = ret.Get(0).([]dto.CreatePhotoFailedResult)
 	}
 	return r0
 }

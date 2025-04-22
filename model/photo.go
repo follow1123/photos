@@ -1,18 +1,19 @@
 package model
 
 import (
-	"database/sql"
+	"time"
 
 	"gorm.io/gorm"
 )
 
 type Photo struct {
 	gorm.Model
-	Desc       string
-	Type       sql.NullString
-	Uri        string
-	Size       sql.NullInt64
-	Sum        string
-	Resolution sql.NullString
-	PhotoDate  sql.NullTime
+	Desc      string
+	Format    string
+	Uri       string
+	Size      int64
+	Sum       string
+	Width     int64
+	Height    int64
+	PhotoDate time.Time
 }

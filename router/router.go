@@ -20,4 +20,7 @@ func Init(r *gin.Engine, appCtx application.AppContext, baseLogger *zap.SugaredL
 	r.POST(controller.PHOTO_API_CREATE, photoCtl.CreatePhoto)
 	r.PUT(controller.PHOTO_API_UPDATE, photoCtl.UpdatePhoto)
 	r.DELETE(controller.PHOTO_API_DELETE, photoCtl.DeletePhoto)
+	r.GET(controller.PHOTO_API_PREVIEW_ORIGINAL, photoCtl.PreviewOriginalPhoto)
+	r.GET(controller.PHOTO_API_PREVIEW_COMPRESSED, photoCtl.PreviewOriginalPhoto)
+	r.GET(controller.PHOTO_API_DOWNLOAD, photoCtl.PreviewOriginalPhoto)
 }

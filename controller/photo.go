@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -16,11 +17,14 @@ import (
 )
 
 const (
-	PHOTO_API_GETBYID string = "/photo/:id"
-	PHOTO_API_LIST           = "/photo"
-	PHOTO_API_CREATE         = PHOTO_API_LIST
-	PHOTO_API_UPDATE         = PHOTO_API_LIST
-	PHOTO_API_DELETE         = PHOTO_API_GETBYID
+	PHOTO_API_GETBYID            string = "/photo/:id"
+	PHOTO_API_LIST                      = "/photo"
+	PHOTO_API_CREATE                    = PHOTO_API_LIST
+	PHOTO_API_UPDATE                    = PHOTO_API_LIST
+	PHOTO_API_DELETE                    = PHOTO_API_GETBYID
+	PHOTO_API_PREVIEW_ORIGINAL          = PHOTO_API_GETBYID + "/preview/original"
+	PHOTO_API_PREVIEW_COMPRESSED        = PHOTO_API_GETBYID + "/preview/compressed"
+	PHOTO_API_DOWNLOAD                  = PHOTO_API_GETBYID + "/download"
 )
 
 type PhotoController interface {
@@ -29,6 +33,7 @@ type PhotoController interface {
 	CreatePhoto(*gin.Context)
 	UpdatePhoto(*gin.Context)
 	DeletePhoto(*gin.Context)
+	PreviewOriginalPhoto(*gin.Context)
 }
 
 type photoController struct {
@@ -81,15 +86,16 @@ func (ctl *photoController) CreatePhoto(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, errors.New("invalid meta data")).SetType(gin.ErrorTypePublic)
 		return
 	}
-	for _, meta := range metaDatas {
-		ctl.Info("upload id: %d", meta.UploadID)
-		fh, err := c.FormFile(fmt.Sprintf("file_%d", meta.UploadID))
+
+	uploadFiles := make(map[uint]*multipart.FileHeader, len(metaDatas))
+
+	for _, data := range metaDatas {
+		fileHeader, err := c.FormFile(fmt.Sprintf("file_%d", data.UploadID))
 		missingFile := errors.Is(err, http.ErrMissingFile)
 		if missingFile {
-			ctl.Info("missing file, upload id: %d", meta.UploadID)
-			uri := strings.TrimSpace(meta.Uri)
+			uri := strings.TrimSpace(data.Uri)
 			if uri == "" {
-				c.AbortWithError(http.StatusBadRequest, errors.New("uri must not empty when not upload file")).SetType(gin.ErrorTypePublic)
+				c.AbortWithError(http.StatusBadRequest, errors.New("when no file is uploaded, uri is required")).SetType(gin.ErrorTypePublic)
 				return
 			}
 			continue
@@ -98,9 +104,9 @@ func (ctl *photoController) CreatePhoto(c *gin.Context) {
 			c.AbortWithError(http.StatusBadRequest, errors.New("upload a bad file")).SetType(gin.ErrorTypePublic)
 			return
 		}
-		meta.MultipartFile = fh
+		uploadFiles[data.UploadID] = fileHeader
 	}
-	c.JSON(http.StatusOK, ctl.service.CreatePhoto(metaDatas))
+	c.JSON(http.StatusOK, ctl.service.CreatePhoto(metaDatas, uploadFiles))
 }
 
 func (ctl *photoController) UpdatePhoto(c *gin.Context) {
@@ -137,4 +143,41 @@ func (ctl *photoController) DeletePhoto(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, data)
+}
+
+func (ctl *photoController) PreviewOriginalPhoto(c *gin.Context) {
+	var photoDto dto.PhotoDto
+	var err error
+	if err = c.BindUri(&photoDto); err != nil {
+		return
+	}
+
+	urlPath := c.Request.URL.Path
+	isDownload := strings.HasSuffix(urlPath, "download")
+	isCompressed := strings.HasSuffix(urlPath, "compressed")
+
+	rc, err := ctl.service.GetPhotoFile(&photoDto, !isCompressed)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	if rc == nil {
+		c.AbortWithError(http.StatusNotFound, common.ErrDataNotFound).SetType(gin.ErrorTypePublic)
+		return
+	}
+	defer rc.Close()
+    extraHeaders := make(map[string]string, 1)
+
+	var fileName string = "qwrewqrwqe"
+
+	if isDownload {
+		extraHeaders["Content-Disposition"] = fmt.Sprintf(`attachment; filename="%s.%s"`, fileName, photoDto.Format)
+	}
+	c.DataFromReader(
+		http.StatusOK,
+		photoDto.Size,
+		fmt.Sprintf("image/%s", photoDto.Format),
+		rc,
+		extraHeaders,
+	)
 }

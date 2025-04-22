@@ -30,6 +30,7 @@ func main() {
 
 
 	appCtx := application.NewAppContext(baseLogger, cfg)
+	defer appCtx.Deinit()
 
 	r := gin.New()
 	// middleware

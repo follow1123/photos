@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
+	"mime/multipart"
 	"strings"
 
 	"github.com/follow1123/photos/application"
-	"github.com/follow1123/photos/filehandler"
+	"github.com/follow1123/photos/imagemanager"
 	"github.com/follow1123/photos/logger"
 	"github.com/follow1123/photos/model"
 	"github.com/follow1123/photos/model/dto"
@@ -20,15 +19,16 @@ import (
 type PhotoService interface {
 	GetPhotoById(uint) (*dto.PhotoDto, error)
 	PhotoList() (*[]dto.PhotoDto, error)
-	CreatePhoto(photo []*dto.PhotoDto) []uint
+	CreatePhoto(photo []*dto.PhotoDto, uploadFiles map[uint]*multipart.FileHeader) []dto.CreatePhotoFailedResult
 	UpdatePhoto(photo *dto.PhotoDto) (*dto.PhotoDto, error)
 	DeletePhoto(uint) (*dto.PhotoDto, error)
+	GetPhotoFile(*dto.PhotoDto, bool) (io.ReadCloser, error)
 }
 
 type photoService struct {
 	logger.AppLogger
-	ctx    application.AppContext
-	db     *gorm.DB
+	ctx application.AppContext
+	db  *gorm.DB
 }
 
 func NewPhotoService(ctx application.AppContext, db *gorm.DB) PhotoService {
@@ -69,29 +69,17 @@ func (serv *photoService) PhotoList() (*[]dto.PhotoDto, error) {
 	return &dataList, nil
 }
 
-func (serv *photoService) saveUploadPhoto(photoDto *dto.PhotoDto) error {
-	mf := photoDto.MultipartFile
-
-	if !strings.Contains(photoDto.Desc, mf.Filename) {
-		photoDto.Desc = fmt.Sprintf("%s\n%s", photoDto.Desc, mf.Filename)
-	}
-	file, err := mf.Open()
+func (serv *photoService) saveUploadPhoto(photoDto *dto.PhotoDto, fileHeader *multipart.FileHeader) error {
+	imgManager, err := serv.ctx.GetImageManager().NewUploadManager(
+		&imagemanager.MultipartSource{FileHeader: fileHeader},
+	)
 	if err != nil {
-		serv.Error("open multipart file error: %s", err.Error())
-		return err
-	}
-	defer file.Close()
-
-	rootPath := filepath.Join(serv.ctx.GetConfig().GetFilesPath(), "test")
-	imgProcessor, err := filehandler.NewImageProcessor(file)
-	if err != nil {
-		serv.Error("init image processor error: %s", err.Error())
 		return err
 	}
 
 	// 判断数据库内是否存在相同的图片
-	photoDto.Sum = imgProcessor.GetHexSum()
-	result := serv.db.Select("id").Where(&model.Photo{Sum: photoDto.Sum}).Take(&model.Photo{});
+	photoDto.Sum = imgManager.GetHexSum()
+	result := serv.db.Select("id").Where(&model.Photo{Sum: photoDto.Sum}).Take(&model.Photo{})
 	if result.Error == nil {
 		return errors.New("file exists")
 	}
@@ -100,43 +88,24 @@ func (serv *photoService) saveUploadPhoto(photoDto *dto.PhotoDto) error {
 	}
 
 	// 获取图片其他信息
-	metaInfo, err := imgProcessor.GetMetaInfo()
+	imgInfo, err := imgManager.GetImageInfo()
 	if err != nil {
 		serv.Error("get image meta info error: %s", err.Error())
 		return err
 	}
-	photoDto.Type = metaInfo.ImgFormat
-	photoDto.Resolution = metaInfo.Resolution
-	photoDto.Size = metaInfo.Size
+	if !strings.Contains(photoDto.Desc, imgInfo.Name) {
+		photoDto.Desc = fmt.Sprintf("%s\n%s", photoDto.Desc, imgInfo.Name)
+	}
+	photoDto.Size = imgInfo.Size
+	photoDto.Format = imgInfo.Format
+	photoDto.Width = imgInfo.Width
+	photoDto.Height = imgInfo.Height
 
-
-	cacheFile, err := os.Create(filepath.Join(rootPath, "img_cache"))
+	uri, err := imgManager.Save()
 	if err != nil {
-		serv.Error("create cache file error: %s", err.Error())
 		return err
 	}
-	defer cacheFile.Close()
-
-
-	rawFile, err := os.Create(filepath.Join(rootPath, "img"))
-	if err != nil {
-		serv.Error("create raw file error: %s", err.Error())
-		return err
-	}
-	defer rawFile.Close()
-
-	_, err = io.Copy(rawFile, bytes.NewReader(imgProcessor.Data))
-	if err != nil {
-		serv.Error("save raw file error: %s", err.Error())
-		return err
-	}
-
-	compressedData, _ := imgProcessor.GetCompressedData()
-	_, err = io.Copy(cacheFile, bytes.NewReader(compressedData))
-	if err != nil {
-		serv.Error("save cache file error: %s", err.Error())
-		return err
-	}
+	photoDto.Uri = uri
 
 	photo := photoDto.ToModel()
 	if result := serv.db.Create(photo); result.Error != nil {
@@ -144,26 +113,21 @@ func (serv *photoService) saveUploadPhoto(photoDto *dto.PhotoDto) error {
 	}
 	return nil
 }
-	// fHandler := serv.ctx.GetFileHandler("")
-	// uri, err := fHandler.Save("", bytes.NewReader(buf.Bytes()))
-	// if err != nil {
-	// 	return err
-	// }
-	// photoDto.Uri = uri
 
-
-func (serv *photoService) CreatePhoto(photoDtos []*dto.PhotoDto) []uint {
-	var failedUploadID []uint
-	for _, dto := range photoDtos {
-		if dto.MultipartFile != nil {
-			err := serv.saveUploadPhoto(dto)
-			if err != nil {
-				serv.Warn("file %s upload failed, %s", dto.MultipartFile.Filename, err.Error())
-				failedUploadID = append(failedUploadID, dto.UploadID)
+func (serv *photoService) CreatePhoto(photoDtos []*dto.PhotoDto, uploadFiles map[uint]*multipart.FileHeader) []dto.CreatePhotoFailedResult {
+	var failedResults []dto.CreatePhotoFailedResult
+	for _, p := range photoDtos {
+		fileHeader, ok := uploadFiles[p.UploadID]
+		if ok {
+			if err := serv.saveUploadPhoto(p, fileHeader); err != nil {
+				failedResults = append(failedResults, dto.CreatePhotoFailedResult{
+					UploadID: p.UploadID,
+					Message:  err.Error(),
+				})
 			}
 		}
 	}
-	return failedUploadID
+	return failedResults
 }
 
 func (serv *photoService) UpdatePhoto(photoDto *dto.PhotoDto) (*dto.PhotoDto, error) {
@@ -197,3 +161,28 @@ func (serv *photoService) DeletePhoto(id uint) (*dto.PhotoDto, error) {
 	photoDto.Update(&photo)
 	return photoDto, nil
 }
+
+func (serv *photoService) GetPhotoFile(photoDto *dto.PhotoDto, original bool) (io.ReadCloser, error) {
+	var photo model.Photo
+	if result := serv.db.First(&photo, photoDto.ID); result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+
+	photoDto.Update(&photo)
+
+	downloadManager := serv.ctx.GetImageManager().NewDownloadManager(photo.Uri)
+	if original {
+		return downloadManager.OpenOriginal()
+	}
+
+	imageData, err := downloadManager.GetCompressed()
+	if err != nil {
+		return nil, err
+	}
+	photoDto.Size = int64(len(imageData))
+	return io.NopCloser(bytes.NewReader(imageData)), nil
+}
+
