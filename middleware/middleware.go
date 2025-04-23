@@ -1,23 +1,15 @@
 package middleware
 
 import (
+	"errors"
+
+	"github.com/follow1123/photos/application"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/render"
 	"go.uber.org/zap"
 )
 
 const ERROR_HANDLER_PREFIX = "[ERROR_HANDLER]"
-
-type ErrorMsg struct {
-	Message string `json:"message"`
-}
-
-func renderErrorMsg(c *gin.Context, message ErrorMsg, logger *zap.SugaredLogger) {
-	r := render.JSON{Data: message}
-	if err := r.Render(c.Writer); err != nil {
-		logger.Error("render message error")
-	}
-}
 
 func GlobalErrorHandler(baseLogger *zap.SugaredLogger) gin.HandlerFunc {
 	errLogger := baseLogger.Named(ERROR_HANDLER_PREFIX)
@@ -38,9 +30,18 @@ func GlobalErrorHandler(baseLogger *zap.SugaredLogger) gin.HandlerFunc {
 		}
 
 		if err.IsType(gin.ErrorTypePrivate) {
-			renderErrorMsg(c, ErrorMsg{Message: "Internal Server Error"}, errLogger)
+			var appError *application.AppError
+			if !errors.As(err, &appError) {
+				appError = application.ErrInternalServerError
+			}
+			c.JSON(appError.Code, appError)
 		} else {
-			renderErrorMsg(c, ErrorMsg{Message: err.Error()}, errLogger)
+			r := render.JSON{Data: application.AppError{
+				Message: err.Error(),
+			}}
+			if err := r.Render(c.Writer); err != nil {
+				errLogger.Error("render message error")
+			}
 		}
 	}
 }

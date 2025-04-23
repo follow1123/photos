@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/follow1123/photos/application"
@@ -22,10 +23,10 @@ type PhotoAPISuite struct {
 	suite.Suite
 	r    *gin.Engine
 	serv *mocks.PhotoService
-	ctl  *photoController
+	ctl  *PhotoController
 }
 
-func TestUnitTestSuite(t *testing.T) {
+func TestPhotoAPISuite(t *testing.T) {
 	suite.Run(t, &PhotoAPISuite{})
 }
 
@@ -43,20 +44,19 @@ func (s *PhotoAPISuite) SetupSuite() {
 	r.POST(PHOTO_API_CREATE, photoCtl.CreatePhoto)
 	r.PUT(PHOTO_API_UPDATE, photoCtl.UpdatePhoto)
 	r.DELETE(PHOTO_API_DELETE, photoCtl.DeletePhoto)
-	s.ctl, _ = photoCtl.(*photoController)
+	s.ctl = &photoCtl
 	s.r = r
 }
 
 func (s *PhotoAPISuite) SetupTest() {
-	service := mocks.PhotoService{}
-	s.serv = &service
-	s.ctl.service = &service
+	s.serv = &mocks.PhotoService{}
+	s.ctl.serv = s.serv
 }
 
 func (s *PhotoAPISuite) TestGetByIdSuccess() {
 	expectedCode, expectedData := http.StatusOK, dto.PhotoDto{
+		ID:   1,
 		Desc: "2343214",
-		Uri:  "123412",
 	}
 	s.serv.On("GetPhotoById", mock.Anything).Return(&expectedData, nil)
 
@@ -65,20 +65,22 @@ func (s *PhotoAPISuite) TestGetByIdSuccess() {
 	s.r.ServeHTTP(w, req)
 
 	s.Equal(expectedCode, w.Code)
-	expectedDataJson, _ := json.Marshal(expectedData)
+	expectedDataJson, err := json.Marshal(expectedData)
+	s.Nil(err)
 	s.Equal(string(expectedDataJson), w.Body.String())
 }
 
 func (s *PhotoAPISuite) TestGetByIdFailure() {
+	_, convErr := strconv.ParseUint("a", 10, 32)
 	scenarios := []struct {
 		uri          string
 		err          error
 		expectedCode int
-		expectedBody string
+		expectedData application.AppError
 	}{
-		{"/photo/a", nil, 400, `{"message":"strconv.ParseUint: parsing \"a\": invalid syntax"}`},
-		{"/photo/1", nil, 404, `{"message":"data not found"}`},
-		{"/photo/1", gorm.ErrDuplicatedKey, 500, `{"message":"Internal Server Error"}`},
+		{"/photo/a", nil, 400, application.AppError{Message: convErr.Error()}},
+		{"/photo/1", application.ErrDataNotFound, 404, *application.ErrDataNotFound},
+		{"/photo/1", gorm.ErrDuplicatedKey, 500, *application.ErrInternalServerError},
 	}
 
 	for _, scenario := range scenarios {
@@ -87,17 +89,17 @@ func (s *PhotoAPISuite) TestGetByIdFailure() {
 		req, _ := http.NewRequest("GET", scenario.uri, nil)
 		s.r.ServeHTTP(w, req)
 		s.Equal(scenario.expectedCode, w.Code)
-		s.Equal(scenario.expectedBody, w.Body.String())
+
+		expectedBody, err := json.Marshal(scenario.expectedData)
+		s.Nil(err)
+		s.Equal(string(expectedBody), w.Body.String())
 		s.serv.On("GetPhotoById").Unset()
 	}
 }
 
 func (s *PhotoAPISuite) TestDeletePhotoSuccess() {
-	expectedCode, expectedData := http.StatusOK, dto.PhotoDto{
-		Desc: "2343214",
-		Uri:  "123412",
-	}
-	s.serv.On("DeletePhoto", mock.Anything).Return(&expectedData, nil)
+	expectedCode := http.StatusNoContent
+	s.serv.On("DeletePhoto", mock.Anything).Return(nil)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", "/photo/1", nil)
@@ -105,29 +107,32 @@ func (s *PhotoAPISuite) TestDeletePhotoSuccess() {
 
 	s.Equal(expectedCode, w.Code)
 
-	expectedDataJson, _ := json.Marshal(expectedData)
-	s.Equal(string(expectedDataJson), w.Body.String())
+	s.Equal(0, w.Body.Len())
 }
 
 func (s *PhotoAPISuite) TestDeletePhotoFailure() {
+	_, convErr := strconv.ParseUint("a", 10, 32)
 	scenarios := []struct {
 		uri          string
 		err          error
 		expectedCode int
-		expectedBody string
+		expectedData application.AppError
 	}{
-		{"/photo/a", nil, 400, `{"message":"strconv.ParseUint: parsing \"a\": invalid syntax"}`},
-		{"/photo/1", nil, 404, `{"message":"data not found"}`},
-		{"/photo/1", gorm.ErrDuplicatedKey, 500, `{"message":"Internal Server Error"}`},
+		{"/photo/a", nil, 400, application.AppError{Message: convErr.Error()}},
+		{"/photo/1", application.ErrDataNotFound, 404, *application.ErrDataNotFound},
+		{"/photo/1", gorm.ErrDuplicatedKey, 500, *application.ErrInternalServerError},
 	}
 
 	for _, scenario := range scenarios {
 		w := httptest.NewRecorder()
-		s.serv.On("DeletePhoto", mock.Anything).Return(nil, scenario.err)
+		s.serv.On("DeletePhoto", mock.Anything).Return(scenario.err)
 		req, _ := http.NewRequest("DELETE", scenario.uri, nil)
 		s.r.ServeHTTP(w, req)
 		s.Equal(scenario.expectedCode, w.Code)
-		s.Equal(scenario.expectedBody, w.Body.String())
+
+		expectedBody, err := json.Marshal(scenario.expectedData)
+		s.Nil(err)
+		s.Equal(string(expectedBody), w.Body.String())
 		s.serv.On("DeletePhoto").Unset()
 	}
 }

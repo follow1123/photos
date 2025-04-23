@@ -7,7 +7,6 @@ import (
 
 	"go.uber.org/zap"
 	gormLogger "gorm.io/gorm/logger"
-	// gormUtils "gorm.io/gorm/utils"
 )
 
 const (

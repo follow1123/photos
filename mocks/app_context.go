@@ -2,7 +2,7 @@ package mocks
 
 import (
 	"github.com/follow1123/photos/config"
-	imagemanager "github.com/follow1123/photos/imageManager"
+	"github.com/follow1123/photos/imagemanager"
 	"github.com/follow1123/photos/logger"
 	"github.com/stretchr/testify/mock"
 )

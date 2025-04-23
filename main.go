@@ -28,7 +28,6 @@ func main() {
 
 	migration.InitOrMigration(db, baseLogger)
 
-
 	appCtx := application.NewAppContext(baseLogger, cfg)
 	defer appCtx.Deinit()
 

@@ -30,6 +30,6 @@ func (w *AppLogger) Error(template string, args ...any) {
 	w.Logger.Errorf(template, args...)
 }
 
-func (w *AppLogger) Fatal(template string, args ...any) {
+		func (w *AppLogger) Fatal(template string, args ...any) {
 	w.Logger.Fatalf(template, args...)
 }

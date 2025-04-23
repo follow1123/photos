@@ -6,36 +6,29 @@ import (
 	"strings"
 )
 
-
 const (
-	DATA_DIR = "photos"
+	DATA_DIR  = "photos"
 	FILES_DIR = "files"
 )
 
-type Config interface {
-	GetAddr() string
-	GetPrefixPath() string
-	GetFilesPath() string
-}
-
-func NewConfig(addr string) Config {
-	return &cfg{address: addr, prefixPath: initPath()}
-}
-
-type cfg struct {
-	address       string
+type Config struct {
+	address    string
 	prefixPath string
 }
 
-func (c *cfg) GetFilesPath() string {
+func NewConfig(addr string) *Config {
+	return &Config{address: addr, prefixPath: initPath()}
+}
+
+func (c *Config) GetFilesPath() string {
 	return filepath.Join(c.prefixPath, FILES_DIR)
 }
 
-func (c *cfg) GetAddr() string {
+func (c *Config) GetAddr() string {
 	return c.address
 }
 
-func (c *cfg) GetPrefixPath() string {
+func (c *Config) GetPrefixPath() string {
 	return c.prefixPath
 }
 
@@ -51,6 +44,6 @@ func initPath() string {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	return dataHome
 }

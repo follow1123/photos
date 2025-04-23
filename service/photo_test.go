@@ -25,7 +25,7 @@ type PhotoServiceSuite struct {
 	logger *zap.SugaredLogger
 }
 
-func TestUnitTestSuite(t *testing.T) {
+func TestPhotoServiceSuite(t *testing.T) {
 	suite.Run(t, &PhotoServiceSuite{})
 }
 
@@ -71,7 +71,6 @@ func (s *PhotoServiceSuite) TestGetByIdSuccess() {
 	expectedData := &dto.PhotoDto{
 		ID:        1,
 		Desc:      "2343214",
-		Uri:       "123412",
 		Size:      102400,
 		PhotoDate: time.Now(),
 	}
@@ -85,30 +84,26 @@ func (s *PhotoServiceSuite) TestGetByIdSuccess() {
 }
 
 func (s *PhotoServiceSuite) TestGetByIdFailure() {
+	expectedErr := application.ErrDataNotFound
 	data, err := s.serv.GetPhotoById(1)
-	s.Nil(err)
 	s.Nil(data)
+	s.Equal(expectedErr, err)
 }
 
 func (s *PhotoServiceSuite) TestDeletePhotoSuccess() {
 	expectedData := &dto.PhotoDto{
 		ID:        1,
 		Desc:      "2343214",
-		Uri:       "123412",
 		Size:      102400,
 		PhotoDate: time.Now(),
 	}
-	expectedDataJson, _ := json.Marshal(expectedData)
 	s.db.Create(expectedData.ToModel())
-	data, err := s.serv.DeletePhoto(1)
-	dataJson, _ := json.Marshal(data)
-	s.Nil(err)
 
-	s.Equal(string(expectedDataJson), string(dataJson))
+	err := s.serv.DeletePhoto(1)
+	s.Nil(err)
 }
 
 func (s *PhotoServiceSuite) TestDeletePhotoFailure() {
-	data, err := s.serv.DeletePhoto(1)
-	s.Nil(err)
-	s.Nil(data)
+	err := s.serv.DeletePhoto(1)
+	s.NotNil(err)
 }

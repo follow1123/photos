@@ -1,30 +1,49 @@
 package dto
 
 import (
+	"mime/multipart"
 	"time"
 
 	"github.com/follow1123/photos/model"
 )
 
-const (
-	PHOTO_OPE_ID_REQUIRED uint = iota
-	PHOTO_OPE_CREATE
-)
+type CreatePhotoParam struct {
+	UploadID   uint                  `json:"uploadId"`
+	Desc       string                `json:"desc"`
+	Uri        string                `json:"uri"`
+	PhotoDate  time.Time             `json:"photoDate" time_format:"2006-01-02 15:04:05"`
+	FileHeader *multipart.FileHeader `json:"-"`
+}
+
+func (cpp *CreatePhotoParam) ToModel() *model.Photo {
+	photo := model.Photo{
+		Desc: cpp.Desc,
+		Uri:  cpp.Uri,
+	}
+	if cpp.PhotoDate.IsZero() {
+		photo.PhotoDate = time.Now()
+	} else {
+		photo.PhotoDate = cpp.PhotoDate
+	}
+	return &photo
+}
 
 type CreatePhotoFailedResult struct {
 	UploadID uint   `json:"uploadId"`
 	Message  string `json:"message"`
 }
 
+type PhotoParam struct {
+	ID        uint      `json:"id" uri:"id" binding:"required"`
+	Desc      string    `json:"desc"`
+	PhotoDate time.Time `json:"photoDate" time_format:"2006-01-02 15:04:05"`
+}
+
 type PhotoDto struct {
-	Operate   uint      `json:"-"`
-	UploadID  uint      `json:"uploadId"`
-	ID        uint      `json:"id" uri:"id" binding:"required_if=Operate 0,omitempty,min=1"`
-	Desc      string    `json:"desc" form:"desc" binding:"required_if=Operate 1"`
+	ID        uint      `json:"id"`
+	Desc      string    `json:"desc"`
 	Format    string    `json:"format"`
-	Uri       string    `json:"uri"`
 	Size      int64     `json:"size"`
-	Sum       string    `json:"-"`
 	Width     int64     `json:"width"`
 	Height    int64     `json:"height"`
 	PhotoDate time.Time `json:"photoDate" time_format:"2006-01-02 15:04:05"`
@@ -33,8 +52,6 @@ type PhotoDto struct {
 func (p *PhotoDto) Update(photo *model.Photo) {
 	p.ID = photo.ID
 	p.Desc = photo.Desc
-	p.Uri = photo.Uri
-	p.Sum = photo.Sum
 	p.Format = photo.Format
 	p.Size = photo.Size
 	p.Width = photo.Width
@@ -45,8 +62,6 @@ func (p *PhotoDto) Update(photo *model.Photo) {
 func (p *PhotoDto) ToModel() *model.Photo {
 	photo := model.Photo{
 		Desc:   p.Desc,
-		Uri:    p.Uri,
-		Sum:    p.Sum,
 		Size:   p.Size,
 		Format: p.Format,
 		Width:  p.Width,

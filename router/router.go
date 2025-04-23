@@ -11,7 +11,7 @@ import (
 
 const LOG_PREFIX = "[ROUTER]"
 
-func Init(r *gin.Engine, appCtx application.AppContext, baseLogger *zap.SugaredLogger, db *gorm.DB) {
+func Init(r *gin.Engine, appCtx *application.AppContext, baseLogger *zap.SugaredLogger, db *gorm.DB) {
 	baseLogger.Debugf("%s init router", LOG_PREFIX)
 
 	photoCtl := controller.NewPhotoController(appCtx, service.NewPhotoService(appCtx, db))

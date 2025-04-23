@@ -16,7 +16,7 @@ func TestConfigTestSuite(t *testing.T) {
 	suite.Run(t, &ConfigTestSuite{})
 }
 
-func (s *ConfigTestSuite) TestInitConfig()  {
+func (s *ConfigTestSuite) TestInitConfig() {
 	cfg := NewConfig(":8080")
 	home := os.Getenv("HOME")
 

@@ -103,7 +103,7 @@ func (s *FileUriTestSuite) TestCreateRemoteFileUriStructureSuccess() {
 	var compressedSuffix = "_compressed"
 
 	scenarios := []struct {
-		remoteUri string
+		remoteUri        string
 		expectedFileType string
 	}{
 		{"ftp://localhost:1234/a/b/c", FTP_FILE},
@@ -133,10 +133,10 @@ func (s *FileUriTestSuite) TestNewFileUriStructure() {
 	s.Nil(err)
 
 	scenarios := []struct {
-		uri string
-		expectedFileType string
-		expectedFilePath string
-		expectedOriginalFilePath string
+		uri                        string
+		expectedFileType           string
+		expectedFilePath           string
+		expectedOriginalFilePath   string
 		expectedCompressedFilePath string
 	}{
 		{localFileUri.String(), localFileUri.fileType, localFileUri.filePath, localFileUri.GetOriginalFilePath(), localFileUri.GetCompressedFilePath()},
@@ -152,4 +152,3 @@ func (s *FileUriTestSuite) TestNewFileUriStructure() {
 		s.Equal(scenario.expectedCompressedFilePath, fileUri.GetCompressedFilePath())
 	}
 }
-

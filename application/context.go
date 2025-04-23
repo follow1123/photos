@@ -7,41 +7,34 @@ import (
 	"go.uber.org/zap"
 )
 
-type AppContext interface {
-	GetLogger() *logger.AppLogger
-	GetConfig() config.Config
-	GetImageManager() *imagemanager.ImageManager
-	Deinit()
-}
-
-type appContext struct {
+type AppContext struct {
 	logger       *logger.AppLogger
-	config       config.Config
+	config       *config.Config
 	imageManager *imagemanager.ImageManager
 }
 
-func NewAppContext(baseLogger *zap.SugaredLogger, config config.Config) AppContext {
+func NewAppContext(baseLogger *zap.SugaredLogger, config *config.Config) *AppContext {
 	appLogger := logger.NewAppLogger(baseLogger)
 	imageManager := imagemanager.NewImageManager(config.GetFilesPath(), appLogger)
-	return &appContext{
+	return &AppContext{
 		logger:       appLogger,
 		config:       config,
 		imageManager: imageManager,
 	}
 }
 
-func (c *appContext) GetLogger() *logger.AppLogger {
-	return c.logger
+func (ac *AppContext) GetLogger() *logger.AppLogger {
+	return ac.logger
 }
 
-func (c *appContext) GetConfig() config.Config {
-	return c.config
+func (ac *AppContext) GetConfig() *config.Config {
+	return ac.config
 }
 
-func (c *appContext) GetImageManager() *imagemanager.ImageManager {
-	return c.imageManager
+func (ac *AppContext) GetImageManager() *imagemanager.ImageManager {
+	return ac.imageManager
 }
 
-func (c *appContext) Deinit() {
-	c.imageManager.Deinit()
+func (ac *AppContext) Deinit() {
+	ac.imageManager.Deinit()
 }
