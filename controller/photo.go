@@ -48,13 +48,19 @@ func (pc *PhotoController) GetPhotoById(c *gin.Context) {
 	c.JSON(http.StatusOK, photoDto)
 }
 
-func (pc *PhotoController) PhotoList(c *gin.Context) {
-	data, err := pc.serv.PhotoList()
+func (pc *PhotoController) PhotoPage(c *gin.Context) {
+	pageParam := dto.PageParam[dto.PhotoPageParam]{}
+
+	if err := c.BindJSON(&pageParam); err != nil {
+		return
+	}
+
+	result, err := pc.serv.PhotoPage(pageParam)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, data)
+	c.JSON(http.StatusOK, result)
 }
 
 func (pc *PhotoController) CreatePhoto(c *gin.Context) {

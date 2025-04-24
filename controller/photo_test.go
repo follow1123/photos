@@ -40,7 +40,7 @@ func (s *PhotoAPISuite) SetupSuite() {
 
 	photoCtl := NewPhotoController(appCtx, nil)
 	r.GET(PHOTO_API_GETBYID, photoCtl.GetPhotoById)
-	r.GET(PHOTO_API_LIST, photoCtl.PhotoList)
+	r.GET(PHOTO_API_LIST, photoCtl.PhotoPage)
 	r.POST(PHOTO_API_CREATE, photoCtl.CreatePhoto)
 	r.PUT(PHOTO_API_UPDATE, photoCtl.UpdatePhoto)
 	r.DELETE(PHOTO_API_DELETE, photoCtl.DeletePhoto)

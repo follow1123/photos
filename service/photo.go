@@ -20,7 +20,7 @@ import (
 
 type PhotoService interface {
 	GetPhotoById(uint) (*dto.PhotoDto, error)
-	PhotoList() (*[]dto.PhotoDto, error)
+	PhotoPage(dto.PageParam[dto.PhotoPageParam]) (*dto.PageResult[dto.PhotoDto], error)
 	CreatePhoto([]dto.CreatePhotoParam) error
 	UpdatePhoto(dto.PhotoParam) (*dto.PhotoDto, error)
 	DeletePhoto(uint) error
@@ -50,25 +50,24 @@ func (ps *photoService) GetPhotoById(id uint) (*dto.PhotoDto, error) {
 	return photoDto, nil
 }
 
-func (ps *photoService) PhotoList() (*[]dto.PhotoDto, error) {
-	var photoList []model.Photo
-
-	if result := ps.db.Find(&photoList); result.Error != nil {
+func (ps *photoService) PhotoPage(pageParam dto.PageParam[dto.PhotoPageParam]) (*dto.PageResult[dto.PhotoDto], error) {
+	var photoDtoList []dto.PhotoDto
+	result := ps.db.Table("photos").Where(pageParam.Params.ToModel()).Offset(pageParam.PageNum - 1).Limit(pageParam.PageSize).Find(&photoDtoList)
+	if result.Error != nil {
 		return nil, result.Error
 	}
 
-	if len(photoList) == 0 {
+	if len(photoDtoList) == 0 {
 		return nil, application.ErrDataNotFound
 	}
 
-	dataList := make([]dto.PhotoDto, len(photoList))
+	return &dto.PageResult[dto.PhotoDto]{
+		List:     photoDtoList,
+		PageNum:  pageParam.PageNum,
+		PageSize: pageParam.PageSize,
+		Total:    0,
+	}, nil
 
-	for i, v := range photoList {
-		dataList[i] = dto.PhotoDto{}
-		dataList[i].Update(&v)
-	}
-
-	return &dataList, nil
 }
 
 func (ps *photoService) saveUploadPhoto(param *dto.CreatePhotoParam) error {
@@ -186,7 +185,7 @@ func (ps *photoService) GetPhotoFile(id uint, original bool) (io.ReadCloser, *im
 	t := time.Now()
 	timestamp := t.Format("20060102150405")
 	fileName := fmt.Sprintf("%s_%s", timestamp, strings.ReplaceAll(uuid.New().String(), "-", ""))
-	imgInfo := &imagemanager.ImageInfo{Name: fileName, Size: photo.Size}
+	imgInfo := &imagemanager.ImageInfo{Name: fileName, Size: photo.Size, Format: photo.Format}
 	if original {
 		reader, err := downloadManager.OpenOriginal()
 		if err != nil {

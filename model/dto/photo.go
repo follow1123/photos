@@ -33,6 +33,14 @@ type CreatePhotoFailedResult struct {
 	Message  string `json:"message"`
 }
 
+type PhotoPageParam struct {
+	Desc string `json:"desc"`
+}
+
+func (ppp *PhotoPageParam) ToModel() *model.Photo {
+	return &model.Photo{Desc: ppp.Desc}
+}
+
 type PhotoParam struct {
 	ID        uint      `json:"id" uri:"id" binding:"required"`
 	Desc      string    `json:"desc"`

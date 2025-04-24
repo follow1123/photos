@@ -16,7 +16,7 @@ func Init(r *gin.Engine, appCtx *application.AppContext, baseLogger *zap.Sugared
 
 	photoCtl := controller.NewPhotoController(appCtx, service.NewPhotoService(appCtx, db))
 	r.GET(controller.PHOTO_API_GETBYID, photoCtl.GetPhotoById)
-	r.GET(controller.PHOTO_API_LIST, photoCtl.PhotoList)
+	r.GET(controller.PHOTO_API_LIST, photoCtl.PhotoPage)
 	r.POST(controller.PHOTO_API_CREATE, photoCtl.CreatePhoto)
 	r.PUT(controller.PHOTO_API_UPDATE, photoCtl.UpdatePhoto)
 	r.DELETE(controller.PHOTO_API_DELETE, photoCtl.DeletePhoto)

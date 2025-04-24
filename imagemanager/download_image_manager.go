@@ -44,13 +44,15 @@ func (dim *DownloadImageManager) OpenOriginal() (io.ReadCloser, error) {
 func (dim *DownloadImageManager) GetCompressed() ([]byte, error) {
 	data, ok := dim.cache.Get(dim.uri.String())
 	if ok {
-		dim.Debug("get compressed from cache")
+		dim.Debug("get compressed image from cache")
 		return data, nil
 	}
+	dim.Debug("get compressed image from local file")
 	compressedFilePath := dim.uri.GetCompressedFilePath()
 	imageData, err := os.ReadFile(compressedFilePath)
 	if err != nil {
 		return nil, err
 	}
+	dim.cache.Set(dim.uri.String(), imageData, 1)
 	return imageData, nil
 }
