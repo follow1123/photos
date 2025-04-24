@@ -25,3 +25,16 @@ func (ms *MultipartSource) GetReader() (io.ReadCloser, error) {
 func (ms *MultipartSource) GetName() string {
 	return ms.FileHeader.Filename
 }
+
+type ReaderSource struct {
+	reader io.Reader
+	name   string
+}
+
+func (rs *ReaderSource) GetReader() (io.ReadCloser, error) {
+	return io.NopCloser(rs.reader), nil
+}
+
+func (rs *ReaderSource) GetName() string {
+	return rs.name
+}
