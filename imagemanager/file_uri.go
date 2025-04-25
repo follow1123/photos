@@ -2,8 +2,8 @@ package imagemanager
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,9 +17,6 @@ const (
 	SCP_FILE          = "scp://"
 )
 
-var ErrInvalidFileType = errors.New("invalid file type")
-var ErrUnsupportedRemoteFiles = errors.New("unsupported remote files")
-
 type FileUri struct {
 	uri       string
 	fileType  string
@@ -27,7 +24,7 @@ type FileUri struct {
 	filesRoot string
 }
 
-func newFileUri(filesRoot string, uri string) *FileUri {
+func NewFileUri(filesRoot string, uri string) *FileUri {
 	var fileType string
 	if strings.HasPrefix(uri, LOCAL_FILE) {
 		fileType = LOCAL_FILE
@@ -45,7 +42,7 @@ func newFileUri(filesRoot string, uri string) *FileUri {
 		filesRoot: filesRoot,
 	}
 }
-func createLocalFileUri(filesRoot string) *FileUri {
+func CreateLocalFileUri(filesRoot string) *FileUri {
 	var fileType = LOCAL_FILE
 	t := time.Now()
 	id := strings.ReplaceAll(uuid.New().String(), "-", "")
@@ -62,7 +59,7 @@ func createLocalFileUri(filesRoot string) *FileUri {
 	}
 }
 
-func createRemoteFileUri(filesRoot string, remoteUri string) (*FileUri, error) {
+func CreateRemoteFileUri(filesRoot string, remoteUri string) (*FileUri, error) {
 	var fileType string
 	if strings.HasPrefix(remoteUri, FTP_FILE) {
 		fileType = FTP_FILE
@@ -93,6 +90,14 @@ func (fu *FileUri) String() string {
 
 func (fu *FileUri) Is(fileType string) bool {
 	return fu.fileType == fileType
+}
+
+func (fu *FileUri) CreateFilePath() error {
+	err := os.MkdirAll(filepath.Dir(fu.filePath), 0755)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (fu *FileUri) GetOriginalFilePath() string {

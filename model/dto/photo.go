@@ -1,18 +1,18 @@
 package dto
 
 import (
-	"mime/multipart"
 	"time"
 
+	"github.com/follow1123/photos/imagemanager"
 	"github.com/follow1123/photos/model"
 )
 
 type CreatePhotoParam struct {
-	UploadID   uint                  `json:"uploadId"`
-	Desc       string                `json:"desc"`
-	Uri        string                `json:"uri"`
-	PhotoDate  time.Time             `json:"photoDate" time_format:"2006-01-02 15:04:05"`
-	FileHeader *multipart.FileHeader `json:"-"`
+	UploadID    uint                     `json:"uploadId"`
+	Desc        string                   `json:"desc"`
+	Uri         string                   `json:"uri"`
+	PhotoDate   time.Time                `json:"photoDate" time_format:"2006-01-02 15:04:05"`
+	ImageSource imagemanager.ImageSource `json:"-"`
 }
 
 func (cpp *CreatePhotoParam) ToModel() *model.Photo {

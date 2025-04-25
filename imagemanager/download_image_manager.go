@@ -20,7 +20,7 @@ func NewDownloadImageManager(
 	cache *ImageCache,
 ) *DownloadImageManager {
 	return &DownloadImageManager{
-		uri:       *newFileUri(filesRoot, uri),
+		uri:       *NewFileUri(filesRoot, uri),
 		cache:     cache,
 		AppLogger: *logger,
 	}

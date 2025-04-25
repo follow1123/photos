@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/follow1123/photos/application"
+	"github.com/follow1123/photos/imagemanager"
 	"github.com/follow1123/photos/logger"
 	"github.com/follow1123/photos/model/dto"
 	"github.com/follow1123/photos/service"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const (
@@ -31,8 +34,8 @@ type PhotoController struct {
 	serv service.PhotoService
 }
 
-func NewPhotoController(ctx *application.AppContext, service service.PhotoService) PhotoController {
-	return PhotoController{ctx: ctx, serv: service, AppLogger: *ctx.GetLogger()}
+func NewPhotoController(ctx *application.AppContext, service service.PhotoService) *PhotoController {
+	return &PhotoController{ctx: ctx, serv: service, AppLogger: *ctx.GetLogger()}
 }
 
 func (pc *PhotoController) GetPhotoById(c *gin.Context) {
@@ -77,22 +80,34 @@ func (pc *PhotoController) CreatePhoto(c *gin.Context) {
 		fileHeader, err := c.FormFile(fmt.Sprintf("file_%d", param.UploadID))
 		if err != nil {
 			if errors.Is(err, http.ErrMissingFile) {
-				if uri := strings.TrimSpace(param.Uri); uri == "" {
+				param.Uri = strings.TrimSpace(param.Uri)
+				if param.Uri == "" {
 					c.Error(application.NewAppError(http.StatusBadRequest, "不上传文件时，uri 必须填写"))
 					return
 				}
+				param.ImageSource = imagemanager.NewRemoteUriSource(param.Uri)
 				continue
 			}
 			c.Error(application.NewAppError(http.StatusBadRequest, "上传了错误的文件"))
 			return
 		}
-		param.FileHeader = fileHeader
+		param.ImageSource = imagemanager.NewMultipartSource(fileHeader)
 	}
-	if err := pc.serv.CreatePhoto(params); err != nil {
-		c.Error(err)
+	failedResults := pc.serv.CreatePhoto(params)
+	failureCount := len(failedResults)
+	if failureCount == 0 {
+		c.Status(http.StatusNoContent)
 		return
 	}
-	c.Status(http.StatusNoContent)
+	successCount := len(params) - failureCount
+	appError := application.NewAppError(
+		http.StatusMultiStatus,
+		"%d 个文件上传成功，%d 个文件上传失败",
+		successCount,
+		failureCount,
+	)
+	appError.Details = failedResults
+	c.Error(appError)
 }
 
 func (pc *PhotoController) UpdatePhoto(c *gin.Context) {
@@ -140,7 +155,10 @@ func (pc *PhotoController) PreviewOriginalPhoto(c *gin.Context) {
 	extraHeaders := make(map[string]string, 1)
 
 	if isDownload {
-		extraHeaders["Content-Disposition"] = fmt.Sprintf(`attachment; filename="%s.%s"`, imgInfo.Name, imgInfo.Format)
+		t := time.Now()
+		timestamp := t.Format("20060102150405")
+		fileName := fmt.Sprintf("%s_%s", timestamp, strings.ReplaceAll(uuid.New().String(), "-", ""))
+		extraHeaders["Content-Disposition"] = fmt.Sprintf(`attachment; filename="%s.%s"`, fileName, imgInfo.Format)
 	}
 	c.DataFromReader(
 		http.StatusOK,
@@ -149,4 +167,15 @@ func (pc *PhotoController) PreviewOriginalPhoto(c *gin.Context) {
 		rc,
 		extraHeaders,
 	)
+}
+
+func (pc *PhotoController) SetHandleMapping(engine *gin.Engine) {
+	engine.GET(PHOTO_API_GETBYID, pc.GetPhotoById)
+	engine.GET(PHOTO_API_LIST, pc.PhotoPage)
+	engine.POST(PHOTO_API_CREATE, pc.CreatePhoto)
+	engine.PUT(PHOTO_API_UPDATE, pc.UpdatePhoto)
+	engine.DELETE(PHOTO_API_DELETE, pc.DeletePhoto)
+	engine.GET(PHOTO_API_PREVIEW_ORIGINAL, pc.PreviewOriginalPhoto)
+	engine.GET(PHOTO_API_PREVIEW_COMPRESSED, pc.PreviewOriginalPhoto)
+	engine.GET(PHOTO_API_DOWNLOAD, pc.PreviewOriginalPhoto)
 }

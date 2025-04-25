@@ -8,7 +8,7 @@ type DeleteImageManager struct {
 
 func NewDeleteImageManager(filesRoot string, uri string) *DeleteImageManager {
 	return &DeleteImageManager{
-		uri: *newFileUri(filesRoot, uri),
+		uri: *NewFileUri(filesRoot, uri),
 	}
 }
 

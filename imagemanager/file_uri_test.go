@@ -30,7 +30,7 @@ func (s *FileUriTestSuite) TestNewFileUriSuccess() {
 	}
 
 	for _, scenario := range scenarios {
-		s.NotPanics(func() { newFileUri(filesRoot, scenario.uri) })
+		s.NotPanics(func() { NewFileUri(filesRoot, scenario.uri) })
 	}
 }
 
@@ -46,7 +46,7 @@ func (s *FileUriTestSuite) TestNewFileUriFailure() {
 	}
 
 	for _, scenario := range scenarios {
-		s.Panics(func() { newFileUri(filesRoot, scenario.uri) })
+		s.Panics(func() { NewFileUri(filesRoot, scenario.uri) })
 	}
 }
 
@@ -61,7 +61,7 @@ func (s *FileUriTestSuite) TestCreateRemoteFileUriSuccess() {
 	}
 
 	for _, scenario := range scenarios {
-		fileUri, err := createRemoteFileUri(filesRoot, scenario.uri)
+		fileUri, err := CreateRemoteFileUri(filesRoot, scenario.uri)
 		s.Nil(err)
 		s.NotNil(fileUri)
 	}
@@ -78,7 +78,7 @@ func (s *FileUriTestSuite) TestCreateRemoteFileUriFailure() {
 	}
 
 	for _, scenario := range scenarios {
-		fileUri, err := createRemoteFileUri(filesRoot, scenario.uri)
+		fileUri, err := CreateRemoteFileUri(filesRoot, scenario.uri)
 		s.Nil(fileUri)
 		s.Equal(ErrUnsupportedRemoteFiles, err)
 	}
@@ -88,7 +88,7 @@ func (s *FileUriTestSuite) TestCreateLocalFileUriStructure() {
 	var filesRoot = "/a/b/c"
 	var originalSuffix = "_original"
 	var compressedSuffix = "_compressed"
-	fileUri := createLocalFileUri(filesRoot)
+	fileUri := CreateLocalFileUri(filesRoot)
 
 	s.Equal(LOCAL_FILE, fileUri.fileType)
 	s.Equal(filesRoot, fileUri.filesRoot)
@@ -111,7 +111,7 @@ func (s *FileUriTestSuite) TestCreateRemoteFileUriStructureSuccess() {
 	}
 
 	for _, scenario := range scenarios {
-		fileUri, err := createRemoteFileUri(filesRoot, scenario.remoteUri)
+		fileUri, err := CreateRemoteFileUri(filesRoot, scenario.remoteUri)
 		s.Nil(err)
 		s.NotNil(fileUri)
 
@@ -127,8 +127,8 @@ func (s *FileUriTestSuite) TestCreateRemoteFileUriStructureSuccess() {
 func (s *FileUriTestSuite) TestNewFileUriStructure() {
 	var filesRoot = "/a/b/c"
 
-	localFileUri := createLocalFileUri(filesRoot)
-	remoteFileUri, err := createRemoteFileUri(filesRoot, "scp://za@localhost:5678/a/b/c")
+	localFileUri := CreateLocalFileUri(filesRoot)
+	remoteFileUri, err := CreateRemoteFileUri(filesRoot, "scp://za@localhost:5678/a/b/c")
 	s.NotNil(remoteFileUri)
 	s.Nil(err)
 
@@ -144,7 +144,7 @@ func (s *FileUriTestSuite) TestNewFileUriStructure() {
 	}
 
 	for _, scenario := range scenarios {
-		fileUri := newFileUri(filesRoot, scenario.uri)
+		fileUri := NewFileUri(filesRoot, scenario.uri)
 		s.Equal(scenario.expectedFileType, fileUri.fileType)
 		s.Equal(filesRoot, fileUri.filesRoot)
 		s.Equal(scenario.expectedFilePath, fileUri.filePath)

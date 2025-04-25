@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/follow1123/photos/common"
 )
 
 const (
@@ -11,13 +13,36 @@ const (
 	FILES_DIR = "files"
 )
 
+func WithAddress(addr string) common.Option[Config] {
+	return common.OptionFunc[Config](func(c *Config) {
+		c.address = addr
+	})
+}
+
+func WithPath(path string) common.Option[Config] {
+	return common.OptionFunc[Config](func(c *Config) {
+		c.prefixPath = path
+	})
+}
+
 type Config struct {
 	address    string
 	prefixPath string
 }
 
-func NewConfig(addr string) *Config {
-	return &Config{address: addr, prefixPath: initPath()}
+func NewConfig(opts ...common.Option[Config]) *Config {
+	conf := &Config{}
+	for _, opt := range opts {
+		opt.Apply(conf)
+	}
+	if conf.address == "" {
+		conf.address = ":8080"
+	}
+
+	if conf.prefixPath == "" {
+		conf.prefixPath = initPath()
+	}
+	return conf
 }
 
 func (c *Config) GetFilesPath() string {
@@ -38,12 +63,21 @@ func initPath() string {
 		xdgDatahome = filepath.Join(os.Getenv("HOME"), ".local/share")
 	}
 	dataHome := filepath.Join(xdgDatahome, DATA_DIR)
-
-	filesHome := filepath.Join(dataHome, FILES_DIR)
-	err := os.MkdirAll(filesHome, 0755)
-	if err != nil {
-		panic(err)
-	}
-
 	return dataHome
+}
+
+func (c *Config) CreatePath() error {
+	err := os.MkdirAll(c.GetFilesPath(), 0755)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Config) DeletePath() error {
+	err := os.RemoveAll(c.GetPrefixPath())
+	if err != nil {
+		return err
+	}
+	return nil
 }

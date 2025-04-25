@@ -17,9 +17,10 @@ func TestConfigTestSuite(t *testing.T) {
 }
 
 func (s *ConfigTestSuite) TestInitConfig() {
-	cfg := NewConfig(":8080")
+	conf := NewConfig()
 	home := os.Getenv("HOME")
 
-	s.Equal(filepath.Join(home, ".local/share", DATA_DIR), cfg.GetPrefixPath())
-	s.Equal(filepath.Join(home, ".local/share", DATA_DIR, FILES_DIR), cfg.GetFilesPath())
+	s.Equal(":8080", conf.GetAddr())
+	s.Equal(filepath.Join(home, ".local/share", DATA_DIR), conf.GetPrefixPath())
+	s.Equal(filepath.Join(home, ".local/share", DATA_DIR, FILES_DIR), conf.GetFilesPath())
 }

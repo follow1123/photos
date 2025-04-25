@@ -4,7 +4,6 @@ import (
 	"github.com/follow1123/photos/config"
 	"github.com/follow1123/photos/imagemanager"
 	"github.com/follow1123/photos/logger"
-	"go.uber.org/zap"
 )
 
 type AppContext struct {
@@ -13,9 +12,7 @@ type AppContext struct {
 	imageManager *imagemanager.ImageManager
 }
 
-func NewAppContext(baseLogger *zap.SugaredLogger, config *config.Config) *AppContext {
-	appLogger := logger.NewAppLogger(baseLogger)
-	imageManager := imagemanager.NewImageManager(config.GetFilesPath(), appLogger)
+func NewAppContext(config *config.Config, imageManager *imagemanager.ImageManager, appLogger *logger.AppLogger) *AppContext {
 	return &AppContext{
 		logger:       appLogger,
 		config:       config,

@@ -5,23 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/follow1123/photos/application"
+	"github.com/follow1123/photos/database"
 	"github.com/follow1123/photos/imagemanager"
 	"github.com/follow1123/photos/logger"
 	"github.com/follow1123/photos/model"
 	"github.com/follow1123/photos/model/dto"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type PhotoService interface {
 	GetPhotoById(uint) (*dto.PhotoDto, error)
 	PhotoPage(dto.PageParam[dto.PhotoPageParam]) (*dto.PageResult[dto.PhotoDto], error)
-	CreatePhoto([]dto.CreatePhotoParam) error
+	CreatePhoto([]dto.CreatePhotoParam) []dto.CreatePhotoFailedResult
 	UpdatePhoto(dto.PhotoParam) (*dto.PhotoDto, error)
 	DeletePhoto(uint) error
 	GetPhotoFile(uint, bool) (io.ReadCloser, *imagemanager.ImageInfo, error)
@@ -30,10 +29,10 @@ type PhotoService interface {
 type photoService struct {
 	logger.AppLogger
 	ctx *application.AppContext
-	db  *gorm.DB
+	db  *database.SqliteDB
 }
 
-func NewPhotoService(ctx *application.AppContext, db *gorm.DB) PhotoService {
+func NewPhotoService(ctx *application.AppContext, db *database.SqliteDB) PhotoService {
 	return &photoService{ctx: ctx, db: db, AppLogger: *ctx.GetLogger()}
 }
 
@@ -70,75 +69,186 @@ func (ps *photoService) PhotoPage(pageParam dto.PageParam[dto.PhotoPageParam]) (
 
 }
 
-func (ps *photoService) saveUploadPhoto(param *dto.CreatePhotoParam) error {
-	imgManager, err := ps.ctx.GetImageManager().NewUploadManager(
-		&imagemanager.MultipartSource{FileHeader: param.FileHeader},
+// func (ps *photoService) saveUploadPhoto(param *dto.CreatePhotoParam) error {
+// 	uploadMgr := ps.ctx.GetImageManager().NewUploadManager(
+// 		imagemanager.NewMultipartSource(param.FileHeader),
+// 	)
+// 	photo := param.ToModel()
+// 	// 判断数据库内是否存在相同的图片
+//
+// 	sum, err := uploadMgr.GetHexSum()
+// 	if err != nil {
+// 		return err
+// 	}
+//
+// 	result := ps.db.Select("id").Where(&model.Photo{Sum: sum}).Take(&model.Photo{})
+// 	if result.Error == nil {
+// 		return errors.New("file exists")
+// 	}
+// 	if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+// 		return result.Error
+// 	}
+//
+// 	photo.Sum = sum
+//
+// 	// 获取图片其他信息
+// 	imgInfo, err := uploadMgr.GetImageInfo()
+// 	if err != nil {
+// 		ps.Error("get image meta info error: %s", err.Error())
+// 		return err
+// 	}
+//
+// 	imageName := uploadMgr.GetImageName()
+// 	if !strings.Contains(photo.Desc, imageName) {
+// 		photo.Desc = fmt.Sprintf("%s\n%s", photo.Desc, imageName)
+// 	}
+// 	photo.Size = imgInfo.Size
+// 	photo.Format = imgInfo.Format
+// 	photo.Width = imgInfo.Width
+// 	photo.Height = imgInfo.Height
+//
+// 	uri, err := uploadMgr.Save()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	photo.Uri = uri
+//
+// 	if result := ps.db.Create(photo); result.Error != nil {
+// 		return result.Error
+// 	}
+// 	return nil
+// }
+
+func (ps *photoService) CreatePhoto(params []dto.CreatePhotoParam) []dto.CreatePhotoFailedResult {
+	var (
+		preparedPhotos = make([]model.Photo, 0, len(params))
+		failedResults  = make([]dto.CreatePhotoFailedResult, 0, len(params))
 	)
-	if err != nil {
-		return err
-	}
-	photo := param.ToModel()
+	var (
+		numWorkers  = 8
+		numJobs     = len(params)
+		numModels   = len(params)
+		numFailures = len(params)
+	)
+	var (
+		wg     sync.WaitGroup
+		sumMap sync.Map
+	)
 
-	// 判断数据库内是否存在相同的图片
-	photo.Sum = imgManager.GetHexSum()
-	result := ps.db.Select("id").Where(&model.Photo{Sum: photo.Sum}).Take(&model.Photo{})
-	if result.Error == nil {
-		return errors.New("file exists")
-	}
-	if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return result.Error
-	}
+	jobs := make(chan int, numJobs)
+	models := make(chan *model.Photo, numModels)
+	failures := make(chan *dto.CreatePhotoFailedResult, numFailures)
 
-	// 获取图片其他信息
-	imgInfo, err := imgManager.GetImageInfo()
-	if err != nil {
-		ps.Error("get image meta info error: %s", err.Error())
-		return err
-	}
-	if !strings.Contains(photo.Desc, imgInfo.Name) {
-		photo.Desc = fmt.Sprintf("%s\n%s", photo.Desc, imgInfo.Name)
-	}
-	photo.Size = imgInfo.Size
-	photo.Format = imgInfo.Format
-	photo.Width = imgInfo.Width
-	photo.Height = imgInfo.Height
+	for range numWorkers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				param := params[job]
+				uploadMgr := ps.ctx.GetImageManager().NewUploadManager(param.ImageSource)
+				var photo = model.Photo{Desc: param.Desc, PhotoDate: param.PhotoDate}
+				imageName := uploadMgr.GetImageName()
+				if !strings.Contains(photo.Desc, imageName) {
+					photo.Desc = ConcatDesc(photo.Desc, imageName)
+				}
 
-	uri, err := imgManager.Save()
-	if err != nil {
-		return err
-	}
-	photo.Uri = uri
+				sum, err := uploadMgr.GetHexSum()
+				if err != nil {
+					ps.Error("get hex sum error: %v", err)
+					failures <- &dto.CreatePhotoFailedResult{
+						UploadID: param.UploadID,
+						Message:  err.Error(),
+					}
+					continue
+				}
 
-	if result := ps.db.Create(photo); result.Error != nil {
-		return result.Error
-	}
-	return nil
-}
+				// 判断是否和其他正在上传的文件重复
+				_, loaded := sumMap.LoadOrStore(sum, true)
+				if loaded {
+					failures <- &dto.CreatePhotoFailedResult{
+						UploadID: param.UploadID,
+						Message:  BuildUploadDupMsg(imageName, photo.Desc),
+					}
+					continue
+				}
 
-func (ps *photoService) CreatePhoto(params []dto.CreatePhotoParam) error {
-	var failedResults []dto.CreatePhotoFailedResult
-	for _, p := range params {
-		if p.FileHeader != nil {
-			if err := ps.saveUploadPhoto(&p); err != nil {
-				failedResults = append(failedResults, dto.CreatePhotoFailedResult{
-					UploadID: p.UploadID,
-					Message:  err.Error(),
-				})
+				// 判断数据库内是否存在相同的图片
+				result := ps.db.Select("id").Where(&model.Photo{Sum: sum}).Take(&model.Photo{})
+				if result.Error == nil {
+					msg := "文件重复"
+					ps.Error(msg)
+					failures <- &dto.CreatePhotoFailedResult{
+						UploadID: param.UploadID,
+						Message:  msg,
+					}
+					continue
+				}
+				if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+					ps.Error("select same sum photo error: %v", err)
+					failures <- &dto.CreatePhotoFailedResult{
+						UploadID: param.UploadID,
+						Message:  result.Error.Error(),
+					}
+					continue
+				}
+
+				photo.Sum = sum
+
+				// 获取图片其他信息
+				imgInfo, err := uploadMgr.GetImageInfo()
+				if err != nil {
+					ps.Error("get image info error: %v", err)
+					failures <- &dto.CreatePhotoFailedResult{
+						UploadID: param.UploadID,
+						Message:  err.Error(),
+					}
+					continue
+				}
+
+				photo.Size = imgInfo.Size
+				photo.Format = imgInfo.Format
+				photo.Width = imgInfo.Width
+				photo.Height = imgInfo.Height
+
+				// 保存图片
+				uri, err := uploadMgr.Save()
+				if err != nil {
+					ps.Error("save image error: %v", err)
+					failures <- &dto.CreatePhotoFailedResult{
+						UploadID: param.UploadID,
+						Message:  err.Error(),
+					}
+					continue
+				}
+				photo.Uri = uri
+
+				// 加入待保存列表
+				models <- &photo
 			}
-		}
-	}
-	failureCount := len(failedResults)
-	if failureCount > 0 {
-		successCount := len(params) - failureCount
-		return application.NewAppError(
-			http.StatusMultiStatus,
-			"%d 个文件上传成功，%d 个文件上传失败",
-			successCount,
-			failureCount,
-		)
+		}()
 	}
 
-	return nil
+	for j := range numJobs {
+		jobs <- j
+	}
+	close(jobs)
+
+	wg.Wait()
+	close(models)
+	close(failures)
+	for failedResult := range failures {
+		failedResults = append(failedResults, *failedResult)
+	}
+
+	for photo := range models {
+		preparedPhotos = append(preparedPhotos, *photo)
+	}
+
+	if result := ps.db.Create(&preparedPhotos); result.Error != nil {
+		panic(fmt.Sprintf("batch save photo error: %v", result.Error))
+	}
+
+	return failedResults
 }
 
 func (ps *photoService) UpdatePhoto(param dto.PhotoParam) (*dto.PhotoDto, error) {
@@ -182,10 +292,7 @@ func (ps *photoService) GetPhotoFile(id uint, original bool) (io.ReadCloser, *im
 
 	downloadManager := ps.ctx.GetImageManager().NewDownloadManager(photo.Uri)
 
-	t := time.Now()
-	timestamp := t.Format("20060102150405")
-	fileName := fmt.Sprintf("%s_%s", timestamp, strings.ReplaceAll(uuid.New().String(), "-", ""))
-	imgInfo := &imagemanager.ImageInfo{Name: fileName, Size: photo.Size, Format: photo.Format}
+	imgInfo := &imagemanager.ImageInfo{Size: photo.Size, Format: photo.Format}
 	if original {
 		reader, err := downloadManager.OpenOriginal()
 		if err != nil {
@@ -200,4 +307,12 @@ func (ps *photoService) GetPhotoFile(id uint, original bool) (io.ReadCloser, *im
 	}
 	imgInfo.Size = int64(len(imageData))
 	return io.NopCloser(bytes.NewReader(imageData)), imgInfo, nil
+}
+
+func ConcatDesc(desc string, name string) string {
+	return fmt.Sprintf("%s\n%s", desc, name)
+}
+
+func BuildUploadDupMsg(dup string, last string) string {
+	return fmt.Sprintf("上传的文件内 [ %s ] 和 [ %s（已保存）] 重复", dup, last)
 }

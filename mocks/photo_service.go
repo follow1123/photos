@@ -24,21 +24,26 @@ func (m *PhotoService) GetPhotoById(id uint) (*dto.PhotoDto, error) {
 	return r0, r1
 }
 
-func (m *PhotoService) PhotoList() (*[]dto.PhotoDto, error) {
-	ret := m.Called()
+func (m *PhotoService) PhotoPage(param dto.PageParam[dto.PhotoPageParam]) (*dto.PageResult[dto.PhotoDto], error) {
+	ret := m.Called(param)
 
-	var r0 *[]dto.PhotoDto
+	var r0 *dto.PageResult[dto.PhotoDto]
 	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(*[]dto.PhotoDto)
+		r0 = ret.Get(0).(*dto.PageResult[dto.PhotoDto])
 	}
 
 	r1 := ret.Error(1)
 	return r0, r1
 }
 
-func (m *PhotoService) CreatePhoto(params []dto.CreatePhotoParam) error {
+func (m *PhotoService) CreatePhoto(params []dto.CreatePhotoParam) []dto.CreatePhotoFailedResult {
 	ret := m.Called(params)
-	return ret.Error(0)
+
+	var r0 []dto.CreatePhotoFailedResult
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]dto.CreatePhotoFailedResult)
+	}
+	return r0
 }
 
 func (m *PhotoService) UpdatePhoto(param dto.PhotoParam) (*dto.PhotoDto, error) {
