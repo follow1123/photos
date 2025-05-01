@@ -6,6 +6,7 @@ import (
 	"github.com/follow1123/photos/application"
 	"github.com/follow1123/photos/config"
 	"github.com/follow1123/photos/logger"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/render"
 )
@@ -46,6 +47,7 @@ func (gws *GinWebServer) InitMiddleware() {
 	gws.UseLoggerMiddleware()
 	gws.UseRecoveryMiddleware()
 	gws.UseErrorHandlerMiddleware()
+	gws.engine.Use(cors.Default())
 }
 
 func (gws *GinWebServer) Start() {
