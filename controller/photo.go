@@ -53,8 +53,12 @@ func (pc *PhotoController) GetPhotoById(c *gin.Context) {
 
 func (pc *PhotoController) PhotoPage(c *gin.Context) {
 	pageParam := dto.PageParam[dto.PhotoPageParam]{}
+	photoParam := dto.PhotoPageParam{}
 
-	if err := c.BindJSON(&pageParam); err != nil {
+	if err := c.BindQuery(&pageParam); err != nil {
+		return
+	}
+	if err := c.BindQuery(&photoParam); err != nil {
 		return
 	}
 

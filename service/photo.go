@@ -50,8 +50,21 @@ func (ps *photoService) GetPhotoById(id uint) (*dto.PhotoDto, error) {
 }
 
 func (ps *photoService) PhotoPage(pageParam dto.PageParam[dto.PhotoPageParam]) (*dto.PageResult[dto.PhotoDto], error) {
-	var photoDtoList []dto.PhotoDto
-	result := ps.db.Table("photos").Where(pageParam.Params.ToModel()).Offset(pageParam.PageNum - 1).Limit(pageParam.PageSize).Find(&photoDtoList)
+	var (
+		photoDtoList []dto.PhotoDto
+		total        int64
+	)
+	query := ps.db.Model(&model.Photo{})
+	if pageParam.Params.Desc != "" {
+		query = query.Where("desc like ?", "%"+pageParam.Params.Desc+"%")
+	}
+
+	result := query.Count(&total)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	result = query.Offset((pageParam.PageNum - 1) * pageParam.PageSize).Limit(pageParam.PageSize).Find(&photoDtoList)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -64,7 +77,7 @@ func (ps *photoService) PhotoPage(pageParam dto.PageParam[dto.PhotoPageParam]) (
 		List:     photoDtoList,
 		PageNum:  pageParam.PageNum,
 		PageSize: pageParam.PageSize,
-		Total:    0,
+		Total:    total,
 	}, nil
 
 }

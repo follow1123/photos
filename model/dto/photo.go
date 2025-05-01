@@ -34,7 +34,7 @@ type CreatePhotoFailedResult struct {
 }
 
 type PhotoPageParam struct {
-	Desc string `json:"desc"`
+	Desc string `json:"desc" form:"desc"`
 }
 
 func (ppp *PhotoPageParam) ToModel() *model.Photo {
