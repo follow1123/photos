@@ -55,18 +55,14 @@ export default class Photo extends HTMLElement {
     }
   }
 
-  connectedCallback() {
-    this.setImgSrc();
-  }
-
   handleImgLoaded() {
-    if (this.img.naturalHeight > this.img.naturalWidth) {
-      this.img.classList.remove("wrap-heidht");
-      this.img.classList.add("wrap-width");
-    } else {
-      this.img.classList.remove("wrap-width");
-      this.img.classList.add("wrap-height");
-    }
+    //if (this.img.naturalHeight > this.img.naturalWidth) {
+    //  this.img.classList.remove("wrap-heidht");
+    //  this.img.classList.add("wrap-width");
+    //} else {
+    //  this.img.classList.remove("wrap-width");
+    //  this.img.classList.add("wrap-height");
+    //}
   }
 
   setImgSrc() {

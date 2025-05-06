@@ -1,20 +1,24 @@
 :host {
-  width: 100%;
-  height: 100%;
+  /*max-width: 16.6666666667%;*/
+  /*max-width: 25%;*/
+  /*max-width: 33.3333333333%;*/
+  /*width: 25%;*/
+
+  aspect-ratio: var(--ratio-square);
   display: block;
+  overflow: hidden;
   box-sizing: border-box;
+  border-radius: var(--radius-1);
+  padding: 1px;
 }
 
 :host(:hover) {
   border: 1px solid yellow;
 }
 
-.wrap-width {
+img {
   width: 100%;
-  height: auto;
-}
-
-.wrap-height {
-  width: auto;
   height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-1);
 }
