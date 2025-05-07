@@ -3,8 +3,8 @@ import templateText from "@components/PhotoList/template.html?raw";
 // @ts-ignore
 import stylesText from "@components/PhotoList/styles.css?raw";
 
-import PagedWindow from "@components/PhotoList/pagedWindow";
-import Photo from "../Photo";
+import PagedWindow from "@components/PhotoList/PagedWindow";
+import Photo from "@components/Photo";
 
 /** @typedef {import('@/eventbus').EventHandler} EventHandler */
 
@@ -54,16 +54,26 @@ export default class PhotoList extends HTMLElement {
     this.#originalImg = originalImgEle;
     this.#dialog = dialogEle;
     this.#container = divEle;
+    /** @type {import("@components/PhotoList/CachedPager").PageLoader<HTMLElement>} */
+    let pageLoader = {
+      load: this.#handleLoadPage.bind(this),
+      unload: (next) => {
+        let photo = null;
+        while ((photo = next()) !== null) {
+          if (!(photo instanceof Photo)) return;
+          photo.removeAttribute("photo-id");
+        }
+      },
+    };
 
     this.#pagedWindow = new PagedWindow(
       /** @type {import("@components/PhotoList/fixedSizeViewer").ViewerOptions<>} */
       {
         root: this.#container,
         total: 200,
-        pageSize: 30,
+        pageSize: 20,
         elementProvider: () => document.createElement("p-photo"),
-        //elementProvider: () => document.createElement("div"),
-        loadingPageFn: this.#handleLoadPage.bind(this),
+        pageLoader: pageLoader,
       },
     );
 
@@ -75,36 +85,14 @@ export default class PhotoList extends HTMLElement {
 
   connectedCallback() {
     this.#pagedWindow.init();
-    //fetch("http://localhost:8080/photo?pageNum=1&pageSize=30")
-    //  .then((resp) => resp.json())
-    //  .then((data) => {
-    //    let list = Array.from(data.list);
-    //    list.forEach((item) => {
-    //      let photo = document.createElement("p-photo");
-    //      photo.setAttribute("photo-id", item.id);
-    //      photo.addEventListener(
-    //        "preview",
-    //        this.#handlePhotoPreview.bind(this),
-    //      );
-    //      this.#container.append(photo);
-    //    });
-    //  })
-    //  .catch((error) => {
-    //    console.error("Error:", error); // 错误处理
-    //  });
   }
 
-  /** @type {import("@components/PhotoList/pagedWindow").LoadingPage} */
+  /**
+   * @param {number} pageNum
+   * @param {number} pageSize
+   * @param {() => HTMLElement | null} next
+   */
   #handleLoadPage(pageNum, pageSize, next) {
-    //let start = (pageNum - 1) * pageSize;
-    //let end = pageNum * pageSize;
-
-    //for (let i = start; i < end; i++) {
-    //  let e = next();
-    //  if (e) {
-    //    e.innerText = `image-${i}`;
-    //  }
-    //}
     fetch(`http://localhost:8080/photo?pageNum=${pageNum}&pageSize=${pageSize}`)
       .then((resp) => resp.json())
       .then((data) => {
@@ -123,7 +111,6 @@ export default class PhotoList extends HTMLElement {
    * @type EventListener
    */
   #handlePhotoPreview(e) {
-    console.log("handle preview in photo list");
     if (!(e instanceof CustomEvent)) throw new Error("not custom event");
     this.#originalImg.src = e.detail.originalUri;
   }
