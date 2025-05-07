@@ -2,6 +2,8 @@
 import templateText from "@components/Photo/template.html?raw";
 // @ts-ignore
 import stylesText from "@components/Photo/styles.css?raw";
+// @ts-ignore
+import imgLoadingUri from "@/assets/image_loading.png";
 
 let tpl = new DOMParser()
   .parseFromString(templateText, "text/html")
@@ -35,8 +37,16 @@ export default class Photo extends HTMLElement {
     }
 
     this.img = imgEle;
-    this.img.addEventListener("load", this.handleImgLoaded.bind(this));
+
     this.img.addEventListener("click", this.dispatchPreviewEvent.bind(this));
+  }
+
+  connectedCallback() {
+    this.setDefaultSrc();
+  }
+
+  disconnectedCallback() {
+    this.removeAttribute("photo-id");
   }
 
   /**
@@ -47,6 +57,7 @@ export default class Photo extends HTMLElement {
   attributeChangedCallback(name, oldValue, newValue) {
     if (name === "photo-id") {
       if (newValue === null || newValue === "") {
+        this.photoId = null;
         this.clearImgSrc();
       } else {
         this.photoId = newValue;
@@ -55,14 +66,8 @@ export default class Photo extends HTMLElement {
     }
   }
 
-  handleImgLoaded() {
-    //if (this.img.naturalHeight > this.img.naturalWidth) {
-    //  this.img.classList.remove("wrap-heidht");
-    //  this.img.classList.add("wrap-width");
-    //} else {
-    //  this.img.classList.remove("wrap-width");
-    //  this.img.classList.add("wrap-height");
-    //}
+  setDefaultSrc() {
+    this.img.src = imgLoadingUri;
   }
 
   setImgSrc() {
@@ -70,7 +75,7 @@ export default class Photo extends HTMLElement {
   }
 
   clearImgSrc() {
-    this.img.removeAttribute("src");
+    this.setDefaultSrc();
     let ce = new CustomEvent("clear");
     this.dispatchEvent(ce);
   }
@@ -79,7 +84,6 @@ export default class Photo extends HTMLElement {
    * @param {Event} e
    */
   dispatchPreviewEvent(e) {
-    console.log("image clicked");
     e.stopPropagation();
     let ce = new CustomEvent("preview", {
       detail: {
