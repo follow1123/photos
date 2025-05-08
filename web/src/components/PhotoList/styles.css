@@ -47,6 +47,10 @@ dialog button {
   right: 10px;
 }
 
+.hidden {
+  display: none;
+}
+
 @media (min-width: 600px) {
   #container > * {
     max-width: 25%;

@@ -19,28 +19,18 @@ function ArrayManager(arr) {
 }
 
 /**
- * @returns {import("@components/PhotoList/CachedPager").PageLoader<number>}
+ * @returns {import("@components/PhotoList/CachedPager").PageManager<number>}
  */
-function NumPageLoader() {
-  /** @type {import("@components/PhotoList/CachedPager").PageLoader<number>} */
+function NumPageManager() {
+  /** @type {import("@components/PhotoList/CachedPager").PageManager<number>} */
   let pl = {
-    load: (pageNum, pageSize, next) => {},
-    unload: (elements) => {},
+    load: (pageNum, pageSize, next) => Promise.resolve(100),
+    unload: (e) => {},
+    show: (e) => {},
+    hide: (e) => {},
   };
   return pl;
 }
-
-//describe("new FixSizeViewer", () => {
-//  it("create success", () => {
-//    expect(
-//      () =>
-//        new FixedSizeInfiniteList({
-//          len: 128,
-//          manager: ArrayManager(new Array()),
-//        }),
-//    ).not.toThrowError();
-//  });
-//});
 
 describe("next page", () => {
   /** @type {Array<number>} */
@@ -51,36 +41,35 @@ describe("next page", () => {
   beforeEach(() => {
     arr = new Array();
     pager = new CachedPager({
-      total: 300,
-      pageSize: 10,
-      manager: ArrayManager(arr),
-      loader: NumPageLoader(),
+      elementLength: 62,
+      elementMgr: ArrayManager(arr),
+      pageMgr: NumPageManager(),
     });
     pager.init();
+    pager.pageSize = 10;
   });
 
-  it("next", () => {
-    expect(pager.next()).toEqual({ start: 0, end: 9 });
-    expect(pager.next()).toEqual({ start: 0, end: 19 });
-    expect(pager.next()).toEqual({ start: 0, end: 29 });
-    expect(pager.next()).toEqual({ start: 10, end: 39 });
-    expect(pager.next()).toEqual({ start: 20, end: 49 });
-    expect(pager.next()).toEqual({ start: 30, end: 59 });
+  it("next", async () => {
+    await expect(pager.next()).resolves.toEqual({ start: 0, end: 9 });
+    await expect(pager.next()).resolves.toEqual({ start: 0, end: 19 });
+    await expect(pager.next()).resolves.toEqual({ start: 0, end: 29 });
+    await expect(pager.next()).resolves.toEqual({ start: 10, end: 39 });
+    await expect(pager.next()).resolves.toEqual({ start: 20, end: 49 });
   });
 
-  it("scroll triggered", () => {
-    for (let i = 0; i < 11; i++) {
-      pager.next();
+  it("scroll triggered", async () => {
+    for (let i = 0; i < 6; i++) {
+      await pager.next();
     }
-    expect(pager.next()).toEqual({ start: 90, end: 119 });
-    expect(pager.next()).toEqual({ start: 80, end: 109 });
+    await expect(pager.next()).resolves.toEqual({ start: 20, end: 49 });
+    await expect(pager.next()).resolves.toEqual({ start: 30, end: 59 });
   });
 
-  it("to bottom", () => {
-    for (let i = 0; i < 30; i++) {
-      pager.next();
+  it("to bottom", async () => {
+    for (let i = 0; i < 10; i++) {
+      await pager.next();
     }
-    expect(() => pager.next()).toThrowError();
+    await expect(() => pager.next()).rejects.toThrowError();
   });
 });
 
@@ -93,40 +82,43 @@ describe("previous page", () => {
   beforeEach(() => {
     arr = new Array();
     pager = new CachedPager({
-      total: 300,
-      pageSize: 10,
-      manager: ArrayManager(arr),
-      loader: NumPageLoader(),
+      elementLength: 62,
+      elementMgr: ArrayManager(arr),
+      pageMgr: NumPageManager(),
     });
     pager.init();
+    pager.pageSize = 10;
   });
 
-  it("previous", () => {
+  it("previous", async () => {
     for (let i = 0; i < 10; i++) {
-      pager.next();
+      await pager.next();
     }
 
-    expect(pager.previous()).toEqual({ start: 60, end: 89 });
-    expect(pager.previous()).toEqual({ start: 50, end: 79 });
-    expect(pager.previous()).toEqual({ start: 40, end: 69 });
+    await expect(pager.previous()).resolves.toEqual({ start: 20, end: 49 });
+    await expect(pager.previous()).resolves.toEqual({ start: 10, end: 39 });
+    await expect(pager.previous()).resolves.toEqual({ start: 0, end: 29 });
   });
 
-  it("scroll triggered", () => {
-    for (let i = 0; i < 12; i++) {
-      pager.next();
+  it("scroll triggered", async () => {
+    for (let i = 0; i < 10; i++) {
+      await pager.next();
     }
-    expect(pager.previous()).toEqual({ start: 80, end: 109 });
+    await expect(pager.previous()).resolves.toEqual({ start: 20, end: 49 });
+    await expect(pager.previous()).resolves.toEqual({ start: 10, end: 39 });
+    await expect(pager.previous()).resolves.toEqual({ start: 0, end: 29 });
+    await expect(pager.previous()).resolves.toEqual({ start: 10, end: 39 });
   });
 
-  it("to top", () => {
-    expect(() => pager.previous()).toThrowError();
-    for (let i = 0; i < 30; i++) {
-      pager.next();
+  it("to top", async () => {
+    await expect(() => pager.previous()).rejects.toThrowError();
+    for (let i = 0; i < 10; i++) {
+      await pager.next();
     }
 
-    for (let i = 0; i < 27; i++) {
-      pager.previous();
+    for (let i = 0; i < 7; i++) {
+      await pager.previous();
     }
-    expect(() => pager.previous()).toThrowError();
+    await expect(() => pager.previous()).rejects.toThrowError();
   });
 });

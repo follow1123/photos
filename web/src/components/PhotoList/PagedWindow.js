@@ -1,16 +1,16 @@
 import CachedPager from "@components/PhotoList/CachedPager";
 
 /**
+ * @template E
  * @typedef {Object} Options
  * @property {Element} root 窗口元素
- * @property {number} pageSize 每页大小
- * @property {number} total 总共要显示的元素
- * @property {import("@components/PhotoList/CachedPager").PageLoader<HTMLElement>} pageLoader
- * @property {() => HTMLElement} elementProvider
+ * @property {import("@components/PhotoList/CachedPager").PageManager<E>} pageMgr
+ * @property {() => E} elementProvider
  */
 
 /**
  * 分页窗口
+ * @template E
  * @class
  */
 export default class PagedWindow {
@@ -18,39 +18,41 @@ export default class PagedWindow {
   #root;
   /** @type {IntersectionObserver} */
   #observer;
-  /** @type {Map<string, Element | null>} */
-  #observedMap;
-
-  /** @type {CachedPager<HTMLElement>} */
+  /** @type {CachedPager<E>} */
   #pager;
+  /** @type {ResizeObserver} */
+  #resizeObserver;
+
+  /** @type {Element | null} */
+  #pagesStartElement = null;
+  /** @type {Element | null} */
+  #pagesEndElement = null;
 
   /**
    * @constructor
-   * @param {Options} options
+   * @param {Options<E>} options
    */
   constructor(options) {
     // 参数校验
     let opt = options || {};
     if (!opt.root) throw new Error("window root cannot be null");
-    if (!opt.total) throw new Error("total cannot be null");
-    if (!opt.pageSize) throw new Error("page size cannot be null");
     if (!opt.elementProvider)
       throw new Error("element provider cannot be null");
-    if (!opt.pageLoader) throw new Error("page loader cannot be null");
+    if (!opt.pageMgr) throw new Error("page loader cannot be null");
 
     // 变量初始化
     this.#root = opt.root;
-    this.#observedMap = new Map();
 
-    /** @type {import("@components/PhotoList/FixedSizeInfiniteList").ElementManager<HTMLElement>} */
+    /** @type {import("@components/PhotoList/FixedSizeInfiniteList").ElementManager<E>} */
     let manager = {
       createElement: opt.elementProvider,
-      addElement: (element) => this.#root.appendChild(element),
+      addElement: (element) =>
+        this.#root.appendChild(/** @type {HTMLElement} */ (element)),
       getElement: (index) => {
-        let e = this.#root.children.item(index);
-        if (!(e instanceof HTMLElement))
+        let e = this.#root.children[index];
+        if (e === undefined)
           throw new Error(`root has not element on index ${index}`);
-        return e;
+        return /** @type {E} */ (e);
       },
       moveToTop: (start, end) =>
         this.#root.prepend(
@@ -61,34 +63,62 @@ export default class PagedWindow {
     };
 
     this.#pager = new CachedPager({
-      pageSize: opt.pageSize,
-      total: opt.total,
-      manager: manager,
-      loader: opt.pageLoader,
+      elementMgr: manager,
+      pageMgr: opt.pageMgr,
     });
 
     this.#observer = new IntersectionObserver(
       this.#handleIntersectionObserver.bind(this),
       { root: opt.root, threshold: 0.5 },
     );
-
-    //this.#root.addEventListener("wheel", this.#handleRootWheelEvent.bind(this));
+    this.#resizeObserver = new ResizeObserver(
+      this.#handleRootResize.bind(this),
+    );
   }
 
   init() {
     this.#pager.init();
 
-    let range = this.#pager.next();
-    this.#observe("pages-end", this.#getRootItem(range.end));
+    let pageSize = this.#calcPageSize();
+    console.log(pageSize);
+    this.#pager.pageSize = pageSize;
+
+    this.#pager.next().then((r) => {
+      this.#observe(null, this.#getRootItem(r.end));
+    });
+    this.#resizeObserver.observe(this.#root);
+  }
+
+  deinit() {
+    this.#observer.disconnect();
+    this.#resizeObserver.disconnect();
   }
 
   /**
    * @returns {number}
    */
-  getNumOfElementsPerRow() {
-    let rootWidth = this.#root.getBoundingClientRect().width;
-    let childWidth = this.#root.children[0].getBoundingClientRect().width;
-    return Math.floor(rootWidth / childWidth);
+  #calcPageSize() {
+    let rootRect = this.#root.getBoundingClientRect();
+    let firstChild = this.#root.children.item(0);
+    if (!firstChild) throw new Error("child elements not initialized");
+    let childRect = firstChild.getBoundingClientRect();
+    let numOfElementsPerRow = Math.floor(rootRect.width / childRect.width);
+    let numOfElementsPerColumn = Math.ceil(rootRect.height / childRect.height);
+    let maxVisibleElements =
+      numOfElementsPerRow * numOfElementsPerColumn + numOfElementsPerRow;
+
+    return (
+      Math.floor(
+        (maxVisibleElements + numOfElementsPerRow) / numOfElementsPerRow,
+      ) * numOfElementsPerRow
+    );
+  }
+
+  /** @type {ResizeObserverCallback} */
+  #handleRootResize(entries) {
+    entries.forEach(() => {
+      this.#pager.resize(this.#calcPageSize());
+    });
   }
 
   /**
@@ -98,74 +128,69 @@ export default class PagedWindow {
     observedEntries.forEach((entry) => {
       if (entry.isIntersecting) {
         let element = entry.target;
-        this.#observedMap.forEach((e, name) => {
-          if (e !== element) return;
-          if (name === "pages-start") {
-            this.#unobserve("pages-start");
-            this.#unobserve("pages-end");
-
-            let minPageNum = Math.min(...this.#pager.cache.keys());
-            if (minPageNum > 1) {
-              let range = this.#pager.previous();
-              this.#observe("pages-start", this.#getRootItem(range.start));
-              this.#observe("pages-end", this.#getRootItem(range.end));
-            } else {
-              let maxPageNum = Math.max(...this.#pager.cache.keys());
-              let range = this.#pager.getExistsCacheRange(maxPageNum);
-              this.#observe("pages-end", this.#getRootItem(range.end));
-            }
-          } else if (name === "pages-end") {
-            this.#unobserve("pages-start");
-            this.#unobserve("pages-end");
-            let maxPageNum = Math.max(...this.#pager.cache.keys());
-            if (maxPageNum < this.#pager.maxNum) {
-              let range = this.#pager.next();
-              this.#observe("pages-start", this.#getRootItem(range.start));
-              this.#observe("pages-end", this.#getRootItem(range.end));
-            } else {
-              let minPageNum = Math.min(...this.#pager.cache.keys());
-              let range = this.#pager.getExistsCacheRange(minPageNum);
-              this.#observe("pages-start", this.#getRootItem(range.start));
-            }
+        if (element === this.#pagesStartElement) {
+          this.#unobserve(true, true);
+          if (this.#pager.hasPrevious()) {
+            this.#pager.previous().then((r) => {
+              this.#observe(
+                this.#getRootItem(r.start),
+                this.#getRootItem(r.end),
+              );
+            });
+          } else {
+            let range = this.#pager.maxPageRange;
+            this.#observe(null, this.#getRootItem(range.end));
           }
-        });
+        } else if (element === this.#pagesEndElement) {
+          this.#unobserve(true, true);
+          if (this.#pager.hasNext()) {
+            this.#pager.next().then((r) => {
+              this.#observe(
+                this.#getRootItem(r.start),
+                this.#getRootItem(r.end),
+              );
+            });
+          } else {
+            let range = this.#pager.minPageRange;
+            this.#observe(this.#getRootItem(range.start), null);
+          }
+        }
       }
     });
   }
 
   /**
-   * @param {string} name
-   * @param {Element} element
+   * @param {Element | null} start
+   * @param {Element | null} end
    */
-  #observe(name, element) {
-    if (this.#observedMap.get(name) === element) return;
-
-    this.#observedMap.set(name, element);
-    let hasOther = false;
-    this.#observedMap.forEach((e, n) => {
-      if (name !== n && e === element) {
-        hasOther = true;
-      }
-    });
-    if (!hasOther) this.#observer.observe(element);
+  #observe(start, end) {
+    if (start) {
+      this.#pagesStartElement = start;
+      this.#observer.observe(start);
+    }
+    if (end) {
+      this.#pagesEndElement = end;
+      this.#observer.observe(end);
+    }
   }
 
   /**
-   * @param {string} name
+   * @param {boolean} start
+   * @param {boolean} end
    */
-  #unobserve(name) {
-    let ele = this.#observedMap.get(name);
-    if (!ele) return;
-
-    this.#observedMap.set(name, null);
-    let hasOther = false;
-    this.#observedMap.forEach((e, n) => {
-      if (name !== n && e === ele) {
-        hasOther = true;
+  #unobserve(start, end) {
+    if (start) {
+      if (this.#pagesStartElement) {
+        this.#observer.unobserve(this.#pagesStartElement);
+        this.#pagesStartElement = null;
       }
-    });
-
-    if (!hasOther) this.#observer.unobserve(ele);
+    }
+    if (end) {
+      if (this.#pagesEndElement) {
+        this.#observer.unobserve(this.#pagesEndElement);
+        this.#pagesEndElement = null;
+      }
+    }
   }
 
   /**
@@ -176,26 +201,5 @@ export default class PagedWindow {
     let e = this.#root.children.item(index);
     if (!e) throw new Error(`root has not element on index ${index}`);
     return e;
-  }
-
-  /**
-   * @type EventListener
-   */
-  #handleRootWheelEvent(e) {
-    if (!(e instanceof WheelEvent)) return;
-    if (e.ctrlKey) return;
-    // 禁用默认的滚动行为
-    e.preventDefault();
-
-    let offset = 80;
-
-    // 根据滚轮方向更新 scrollTop
-    if (e.deltaY > 0) {
-      //box.scrollTo({ top: box.scrollTop + offset, behavior: "smooth" });
-      this.#root.scrollTop += offset;
-    } else {
-      //box.scrollTo({ top: box.scrollTop - offset, behavior: "smooth" });
-      this.#root.scrollTop -= offset;
-    }
   }
 }

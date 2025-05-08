@@ -6,6 +6,7 @@
  * @property {(index: number) => E} getElement 获取元素方法
  * @property {(start: number, end: number) => void} moveToTop 指定元素移动到顶部方法
  * @property {(start: number, end: number) => void} moveToBottom 指定元素移动到底部方法
+ * @exports
  */
 
 /**
@@ -15,13 +16,14 @@
  */
 
 /**
+ * @template E
  * @class
  */
 export default class FixedSizeInfiniteList {
   /** @type {number} */
   length;
 
-  /** @type {ElementManager<any>} */
+  /** @type {ElementManager<E>} */
   manager;
 
   /**

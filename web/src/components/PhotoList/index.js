@@ -32,7 +32,7 @@ export default class PhotoList extends HTMLElement {
   /** @type {HTMLDialogElement} */
   #dialog;
 
-  /** @type {PagedWindow} */
+  /** @type {PagedWindow<Photo>} */
   #pagedWindow;
   constructor() {
     super();
@@ -54,27 +54,27 @@ export default class PhotoList extends HTMLElement {
     this.#originalImg = originalImgEle;
     this.#dialog = dialogEle;
     this.#container = divEle;
-    /** @type {import("@components/PhotoList/CachedPager").PageLoader<HTMLElement>} */
+    /** @type {import("@components/PhotoList/CachedPager").PageManager<Photo>} */
     let pageLoader = {
       load: this.#handleLoadPage.bind(this),
-      unload: (next) => {
-        let photo = null;
-        while ((photo = next()) !== null) {
-          if (!(photo instanceof Photo)) return;
-          photo.removeAttribute("photo-id");
-        }
-      },
+      unload: (e) => e.removeAttribute("photo-id"),
+      hide: (e) => e.classList.add("hidden"),
+      show: (e) => e.classList.remove("hidden"),
     };
 
     this.#pagedWindow = new PagedWindow(
-      /** @type {import("@components/PhotoList/fixedSizeViewer").ViewerOptions<>} */
-      {
+      /** @type {import("@components/PhotoList/PagedWindow").Options<Photo>} */
+      ({
         root: this.#container,
-        total: 200,
+        total: 100,
         pageSize: 20,
-        elementProvider: () => document.createElement("p-photo"),
-        pageLoader: pageLoader,
-      },
+        elementProvider: () => {
+          let photo = document.createElement("p-photo");
+          if (!(photo instanceof Photo)) throw new Error("not photo element");
+          return photo;
+        },
+        pageMgr: pageLoader,
+      }),
     );
 
     this.#originalImg.addEventListener(
@@ -90,21 +90,25 @@ export default class PhotoList extends HTMLElement {
   /**
    * @param {number} pageNum
    * @param {number} pageSize
-   * @param {() => HTMLElement | null} next
+   * @param {() => Photo | null} next
+   * @returns {Promise<number>}
    */
   #handleLoadPage(pageNum, pageSize, next) {
-    fetch(`http://localhost:8080/photo?pageNum=${pageNum}&pageSize=${pageSize}`)
+    return fetch(
+      `http://localhost:8080/photo?pageNum=${pageNum}&pageSize=${pageSize}`,
+    )
       .then((resp) => resp.json())
       .then((data) => {
         Array.from(data.list).forEach((item) => {
           let photo = next();
-          if (!(photo instanceof Photo)) throw new Error("error photo");
+          if (photo === null) return;
           photo.setAttribute("photo-id", item.id);
           photo.addEventListener(
             "preview",
             this.#handlePhotoPreview.bind(this),
           );
         });
+        return data.total;
       });
   }
   /**
