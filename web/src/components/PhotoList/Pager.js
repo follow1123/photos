@@ -1,4 +1,9 @@
 import FixedSizeInfiniteList from "@components/PhotoList/FixedSizeInfiniteList";
+import PageRange from "@components/PhotoList/PageRange";
+
+/**
+ * @typedef {import("@components/PhotoList/PageRange").Range} Range
+ */
 
 /**
  * @template E
@@ -32,85 +37,6 @@ import FixedSizeInfiniteList from "@components/PhotoList/FixedSizeInfiniteList";
  * @property {import("@components/PhotoList/FixedSizeInfiniteList").ElementManager<E>} elementMgr
  * @property {PageManager<E>} pageMgr
  */
-
-/**
- * @typedef {Object} PageRange
- * @property {number} start 开始下标
- * @property {number} end 结束下标
- */
-
-class Cache {
-  /** @type {Map<number, PageRange>} */
-  map;
-
-  /** @type {number} */
-  #maxPage = 0;
-  /** @type {number} */
-  #minPage = 0;
-
-  constructor() {
-    this.map = new Map();
-  }
-
-  /**
-   * @returns {number}
-   */
-  getMinPage() {
-    if (this.#minPage === 0) throw new Error("no min page");
-    return this.#minPage;
-  }
-
-  /**
-   * @returns {number}
-   */
-  getMaxPage() {
-    if (this.#maxPage === 0) throw new Error("no max page");
-    return this.#maxPage;
-  }
-
-  /**
-   * @param {number} num
-   */
-  remove(num) {
-    if (this.map.size === 0) throw new Error("no element");
-    this.map.delete(num);
-    this.#minPage = Math.min(...this.map.keys());
-    this.#maxPage = Math.max(...this.map.keys());
-  }
-
-  /**
-   * @returns {number}
-   */
-  size() {
-    return this.map.size;
-  }
-
-  clear() {
-    this.map.clear();
-    this.#minPage = 0;
-    this.#maxPage = 0;
-  }
-
-  /**
-   * @param {number} num
-   * @returns {PageRange}
-   */
-  get(num) {
-    let range = this.map.get(num);
-    if (!range) throw new Error(`invalid page: ${this.#maxPage}`);
-    return range;
-  }
-
-  /**
-   * @param {number} num
-   * @param {PageRange} range
-   */
-  set(num, range) {
-    if (this.#minPage === 0 || num < this.#minPage) this.#minPage = num;
-    if (this.#maxPage === 0 || num > this.#maxPage) this.#maxPage = num;
-    this.map.set(num, range);
-  }
-}
 
 /**
  * @template E
@@ -196,7 +122,7 @@ class PageMgrWrapper {
  * @template E
  * @class
  */
-export default class CachedPager {
+export default class Pager {
   /** @type {number | null} */
   #total = null;
   /** @type {number | null} */
@@ -210,13 +136,8 @@ export default class CachedPager {
   /** @type {PageMgrWrapper<E>} */
   #pageMgr;
 
-  /** @type {Cache} */
-  #cache;
-
-  /** @type {number} */
-  #defaultMaxCacheSize = 3;
-  /** @type {number} */
-  #maxCacheSize;
+  /** @type {PageRange} */
+  #range;
 
   /**
    * @constructor
@@ -226,10 +147,7 @@ export default class CachedPager {
     let opt = options || {};
     if (!opt.elementMgr) throw new Error("element manager cannot be null");
     if (!opt.pageMgr) throw new Error("page manager cannot be null");
-    let len = opt.elementLength ?? 128;
-
-    this.#cache = new Cache();
-    this.#maxCacheSize = this.#defaultMaxCacheSize;
+    let len = opt.elementLength ?? 200;
 
     this.#list = new FixedSizeInfiniteList({
       len: len,
@@ -242,6 +160,8 @@ export default class CachedPager {
       () => this.#maxPageNum ?? -1,
       len,
     );
+
+    this.#range = new PageRange(this.#pageMgr.unload.bind(this.#pageMgr));
   }
 
   init() {
@@ -253,21 +173,48 @@ export default class CachedPager {
    */
   reset(total) {
     this.total = total;
-    if (this.#cache.size() > 0) {
-      this.#pageMgr.unload(this.minPageRange.start, this.maxPageRange.end);
+    if (this.#range.size > 0) {
+      let allRange = this.#range.allPagesRange;
+      this.#pageMgr.unload(allRange.start, allRange.end);
     }
-    this.#cache.clear();
+    this.#range.clear();
   }
 
   /**
    * @param {number} pageSize
+   * @returns {Promise<Range>}
    */
-  resize(pageSize) {
-    if (this.pageSize === pageSize) {
-      return;
+  async resize(pageSize) {
+    if (this.pageSize === pageSize) throw new Error("same page");
+
+    let direction = this.#range.maxPage !== this.#maxPageNum;
+    if (this.pageSize < pageSize) {
+      this.#range.resizeDown(
+        pageSize,
+        this.#pageMgr.unload.bind(this.#pageMgr),
+        direction,
+      );
+    } else {
+      await this.#range.resizeUp(
+        pageSize,
+        (pageNum, pageSize, start, end) => {
+          if (start < 0) {
+            let movedSize = -start;
+            this.#list.scrollUp(movedSize);
+            this.#range.shift(-movedSize);
+          } else if (end >= this.#list.length) {
+            let movedSize = this.#list.length - end;
+            this.#list.scrollDown(movedSize);
+            this.#range.shift(-movedSize);
+          }
+          return this.#pageMgr.load(pageNum, pageSize, start, end);
+        },
+        direction,
+      );
     }
-    // TODO: 重置逻辑
+    this.pageSize = pageSize;
     console.log("page resize: ", pageSize);
+    return this.#range.allPagesRange;
   }
 
   get total() {
@@ -296,12 +243,12 @@ export default class CachedPager {
 
   /**
    * @async
-   * @returns {Promise<PageRange>}
+   * @returns {Promise<Range>}
    */
   async next() {
-    if (this.#cache.map.size === 0) {
+    if (this.#range.size === 0) {
       let range = { start: 0, end: this.pageSize - 1 };
-      this.#cache.set(1, range);
+      this.#range.set(1, range);
       this.total = await this.#pageMgr.load(
         1,
         this.pageSize,
@@ -311,34 +258,23 @@ export default class CachedPager {
       return range;
     }
 
-    if (this.#cache.size() === this.#maxCacheSize) {
-      let unloadPageNum = this.#cache.getMinPage();
-      let range = this.#cache.get(unloadPageNum);
-      this.#pageMgr.unload(range.start, range.end);
-
-      this.#cache.remove(unloadPageNum);
-    }
-
-    let maxPageNum = this.#cache.getMaxPage();
-    let maxPageRange = this.#cache.get(maxPageNum);
+    let maxPageNum = this.#range.maxPage;
+    let maxPageRange = this.#range.get(maxPageNum);
     if (maxPageNum === this.#maxPageNum)
       return Promise.reject(new Error("already on last page"));
-
-    let minPageRange = this.minPageRange;
 
     let nextNum = maxPageNum + 1;
     let range = {
       start: maxPageRange.end + 1,
       end: maxPageRange.end + this.pageSize,
     };
-    this.#cache.set(nextNum, range);
+    this.#range.set(nextNum, range);
+    let minPageRange = this.#range.minRange;
+
     if (range.end >= this.#list.length) {
       let movedSize = Math.min(this.pageSize * 2, minPageRange.start - 1);
       this.#list.scrollDown(movedSize);
-      this.#cache.map.forEach((r) => {
-        r.start -= movedSize;
-        r.end -= movedSize;
-      });
+      this.#range.shift(-movedSize);
     }
 
     const total = await this.#pageMgr.load(
@@ -349,44 +285,32 @@ export default class CachedPager {
     );
     if (this.total !== total)
       throw new Error("some data changed in this query");
-    console.log(
-      "next: ",
-      JSON.stringify(Array.from(this.#cache.map.entries())),
-    );
+    console.log("next: ", this.#range.toString());
     return { start: minPageRange.start, end: range.end };
   }
 
   /**
    * @async
-   * @returns {Promise<PageRange>}
+   * @returns {Promise<Range>}
    */
   async previous() {
-    if (this.#cache.size() < 2)
+    if (this.#range.size < 2)
       return Promise.reject(new Error("already on last page"));
 
     let pageSize = this.pageSize;
-    if (this.#cache.size() === this.#maxCacheSize) {
-      let unloadPageNum = this.#cache.getMaxPage();
-      let range = this.#cache.get(unloadPageNum);
-      this.#pageMgr.unload(range.start, range.end);
 
-      this.#cache.remove(unloadPageNum);
-    }
-
-    let minPageNum = this.#cache.getMinPage();
-    let minPageRange = this.#cache.get(minPageNum);
+    let minPageNum = this.#range.minPage;
+    let minPageRange = this.#range.get(minPageNum);
     if (minPageNum === 1)
       return Promise.reject(new Error("already on last page"));
-
-    let maxPageNum = this.#cache.getMaxPage();
-    let maxPageRange = this.#cache.get(maxPageNum);
 
     let prevNum = minPageNum - 1;
     let range = {
       start: minPageRange.start - pageSize,
       end: minPageRange.start - 1,
     };
-    this.#cache.set(prevNum, range);
+    this.#range.set(prevNum, range);
+    let maxPageRange = this.#range.maxRange;
 
     if (range.start < 0) {
       let movedSize = Math.min(
@@ -394,10 +318,7 @@ export default class CachedPager {
         this.#list.length - maxPageRange.end,
       );
       this.#list.scrollUp(movedSize);
-      this.#cache.map.forEach((r) => {
-        r.start += movedSize;
-        r.end += movedSize;
-      });
+      this.#range.shift(movedSize);
     }
 
     const total = await this.#pageMgr.load(
@@ -408,10 +329,7 @@ export default class CachedPager {
     );
     if (this.total !== total)
       throw new Error("some data changed in this query");
-    console.log(
-      "next: ",
-      JSON.stringify(Array.from(this.#cache.map.entries())),
-    );
+    console.log("previous: ", this.#range.toString());
     return { start: range.start, end: maxPageRange.end };
   }
 
@@ -419,29 +337,21 @@ export default class CachedPager {
    * @returns {boolean}
    */
   hasNext() {
-    return this.#maxPageNum
-      ? this.#cache.getMaxPage() < this.#maxPageNum
-      : true;
+    return this.#maxPageNum ? this.#range.maxPage < this.#maxPageNum : true;
   }
 
   /**
    * @returns {boolean}
    */
   hasPrevious() {
-    return this.#cache.getMinPage() > 1;
+    return this.#range.minPage > 1;
   }
 
-  /**
-   * @returns {PageRange}
-   */
-  get maxPageRange() {
-    return this.#cache.get(this.#cache.getMaxPage());
+  get maxRange() {
+    return this.#range.maxRange;
   }
 
-  /**
-   * @returns {PageRange}
-   */
-  get minPageRange() {
-    return this.#cache.get(this.#cache.getMinPage());
+  get minRange() {
+    return this.#range.minRange;
   }
 }

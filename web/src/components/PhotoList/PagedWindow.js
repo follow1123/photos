@@ -1,10 +1,10 @@
-import CachedPager from "@components/PhotoList/CachedPager";
+import Pager from "@components/PhotoList/Pager";
 
 /**
  * @template E
  * @typedef {Object} Options
  * @property {Element} root 窗口元素
- * @property {import("@components/PhotoList/CachedPager").PageManager<E>} pageMgr
+ * @property {import("@components/PhotoList/Pager").PageManager<E>} pageMgr
  * @property {() => E} elementProvider
  */
 
@@ -18,15 +18,13 @@ export default class PagedWindow {
   #root;
   /** @type {IntersectionObserver} */
   #observer;
-  /** @type {CachedPager<E>} */
+  /** @type {Pager<E>} */
   #pager;
   /** @type {ResizeObserver} */
   #resizeObserver;
 
-  /** @type {Element | null} */
-  #pagesStartElement = null;
-  /** @type {Element | null} */
-  #pagesEndElement = null;
+  /** @type {Map<string, Element>} */
+  #observedMap;
 
   /**
    * @constructor
@@ -42,6 +40,7 @@ export default class PagedWindow {
 
     // 变量初始化
     this.#root = opt.root;
+    this.#observedMap = new Map();
 
     /** @type {import("@components/PhotoList/FixedSizeInfiniteList").ElementManager<E>} */
     let manager = {
@@ -62,7 +61,7 @@ export default class PagedWindow {
         this.#root.append(...Array.from(this.#root.children).slice(start, end)),
     };
 
-    this.#pager = new CachedPager({
+    this.#pager = new Pager({
       elementMgr: manager,
       pageMgr: opt.pageMgr,
     });
@@ -84,7 +83,8 @@ export default class PagedWindow {
     this.#pager.pageSize = pageSize;
 
     this.#pager.next().then((r) => {
-      this.#observe(null, this.#getRootItem(r.end));
+      this.#observedMap.set("pages-end", this.#getRootItem(r.end));
+      this.#observedMap.forEach((e) => this.#observer.observe(e));
     });
     this.#resizeObserver.observe(this.#root);
   }
@@ -117,7 +117,95 @@ export default class PagedWindow {
   /** @type {ResizeObserverCallback} */
   #handleRootResize(entries) {
     entries.forEach(() => {
-      this.#pager.resize(this.#calcPageSize());
+      let pageSize = this.#calcPageSize();
+      console.log(
+        "current page size: ",
+        this.#pager.pageSize,
+        ", new page size: ",
+        pageSize,
+      );
+      if (this.#pager.pageSize === pageSize) return;
+
+      //let startIdx = this.#observedMap.has("pages-start")
+      //  ? this.#pager.minRange.start
+      //  : 0;
+      //let endIdx = this.#observedMap.has("pages-end")
+      //  ? this.#pager.maxRange.end
+      //  : this.#root.children.length - 1;
+      //console.log(startIdx, endIdx);
+      //
+      //let rootRect = this.#root.getBoundingClientRect();
+      //console.log(rootRect);
+      //let topLeftIdx = null;
+      //let bottomRightIdx = null;
+      //for (let i = startIdx; i <= endIdx; i++) {
+      //  let child = this.#root.children[i];
+      //  let childRect = child.getBoundingClientRect();
+      //  if (childRect.top > rootRect.bottom) continue;
+      //  //console.log(childRect);
+      //  if (topLeftIdx === null) {
+      //    topLeftIdx = i;
+      //  } else {
+      //    let curTopDistance = childRect.bottom - rootRect.top;
+      //    let curLeftDistance = childRect.right - rootRect.left;
+      //    let topLeft = this.#root.children[topLeftIdx].getBoundingClientRect();
+      //    let topDistance = childRect.bottom - topLeft.top;
+      //    let leftDistance = childRect.right - topLeft.left;
+      //    if (
+      //      curTopDistance <= topDistance &&
+      //      curLeftDistance <= leftDistance
+      //    ) {
+      //      //console.log("new top left: ", child, childRect);
+      //      topLeftIdx = i;
+      //    }
+      //  }
+      //  if (bottomRightIdx === null) {
+      //    //debugger;
+      //    bottomRightIdx = i;
+      //  } else {
+      //    let curBottomDistance = rootRect.bottom - childRect.top;
+      //    let curRightDistance = rootRect.right - childRect.left;
+      //    let bottomRight =
+      //      this.#root.children[bottomRightIdx].getBoundingClientRect();
+      //    let bottomDistance = rootRect.bottom - bottomRight.top;
+      //    let rightDistance = rootRect.right - bottomRight.left;
+      //
+      //    if (
+      //      curRightDistance <= rightDistance &&
+      //      curBottomDistance <= bottomDistance
+      //    ) {
+      //      //console.log("new bottom right: ", child, childRect);
+      //      bottomRightIdx = i;
+      //    }
+      //  }
+      //}
+      //console.log("左上角元素:", topLeftIdx, this.#root.children[topLeftIdx]);
+      //console.log(
+      //  "右下角元素:",
+      //  bottomRightIdx,
+      //  this.#root.children[bottomRightIdx],
+      //);
+
+      console.log(
+        "before resize: ",
+        this.#pager.minRange.start,
+        this.#pager.maxRange.end,
+      );
+      this.#pager.resize(pageSize).then((r) => {
+        this.#observedMap.forEach((e) => this.#observer.unobserve(e));
+        if (this.#pager.hasPrevious()) {
+          this.#observedMap.set("pages-start", this.#getRootItem(r.start));
+        }
+        if (this.#pager.hasNext()) {
+          this.#observedMap.set("pages-end", this.#getRootItem(r.end));
+        }
+        this.#observedMap.forEach((e) => this.#observer.observe(e));
+        console.log(
+          "after resize: ",
+          this.#pager.minRange.start,
+          this.#pager.maxRange.end,
+        );
+      });
     });
   }
 
@@ -128,69 +216,38 @@ export default class PagedWindow {
     observedEntries.forEach((entry) => {
       if (entry.isIntersecting) {
         let element = entry.target;
-        if (element === this.#pagesStartElement) {
-          this.#unobserve(true, true);
+        if (this.#observedMap.get("pages-start") === element) {
+          this.#observedMap.forEach((e) => this.#observer.unobserve(e));
           if (this.#pager.hasPrevious()) {
             this.#pager.previous().then((r) => {
-              this.#observe(
-                this.#getRootItem(r.start),
-                this.#getRootItem(r.end),
-              );
+              this.#observedMap.set("pages-start", this.#getRootItem(r.start));
+              this.#observedMap.set("pages-end", this.#getRootItem(r.end));
+              this.#observedMap.forEach((e) => this.#observer.observe(e));
             });
           } else {
-            let range = this.#pager.maxPageRange;
-            this.#observe(null, this.#getRootItem(range.end));
+            let range = this.#pager.maxRange;
+            this.#observedMap.set("pages-end", this.#getRootItem(range.end));
+            this.#observedMap.forEach((e) => this.#observer.observe(e));
           }
-        } else if (element === this.#pagesEndElement) {
-          this.#unobserve(true, true);
+        } else if (this.#observedMap.get("pages-end") === element) {
+          this.#observedMap.forEach((e) => this.#observer.unobserve(e));
           if (this.#pager.hasNext()) {
             this.#pager.next().then((r) => {
-              this.#observe(
-                this.#getRootItem(r.start),
-                this.#getRootItem(r.end),
-              );
+              this.#observedMap.set("pages-start", this.#getRootItem(r.start));
+              this.#observedMap.set("pages-end", this.#getRootItem(r.end));
+              this.#observedMap.forEach((e) => this.#observer.observe(e));
             });
           } else {
-            let range = this.#pager.minPageRange;
-            this.#observe(this.#getRootItem(range.start), null);
+            let range = this.#pager.minRange;
+            this.#observedMap.set(
+              "pages-start",
+              this.#getRootItem(range.start),
+            );
+            this.#observedMap.forEach((e) => this.#observer.observe(e));
           }
         }
       }
     });
-  }
-
-  /**
-   * @param {Element | null} start
-   * @param {Element | null} end
-   */
-  #observe(start, end) {
-    if (start) {
-      this.#pagesStartElement = start;
-      this.#observer.observe(start);
-    }
-    if (end) {
-      this.#pagesEndElement = end;
-      this.#observer.observe(end);
-    }
-  }
-
-  /**
-   * @param {boolean} start
-   * @param {boolean} end
-   */
-  #unobserve(start, end) {
-    if (start) {
-      if (this.#pagesStartElement) {
-        this.#observer.unobserve(this.#pagesStartElement);
-        this.#pagesStartElement = null;
-      }
-    }
-    if (end) {
-      if (this.#pagesEndElement) {
-        this.#observer.unobserve(this.#pagesEndElement);
-        this.#pagesEndElement = null;
-      }
-    }
   }
 
   /**

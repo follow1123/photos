@@ -54,7 +54,7 @@ export default class PhotoList extends HTMLElement {
     this.#originalImg = originalImgEle;
     this.#dialog = dialogEle;
     this.#container = divEle;
-    /** @type {import("@components/PhotoList/CachedPager").PageManager<Photo>} */
+    /** @type {import("@components/PhotoList/Pager").PageManager<Photo>} */
     let pageLoader = {
       load: this.#handleLoadPage.bind(this),
       unload: (e) => e.removeAttribute("photo-id"),

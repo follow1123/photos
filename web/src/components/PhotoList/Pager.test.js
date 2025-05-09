@@ -1,5 +1,5 @@
 import { expect, describe, it, beforeEach } from "vitest";
-import CachedPager from "@components/PhotoList/CachedPager";
+import Pager from "@components/PhotoList/Pager";
 
 /**
  * @param {Array<number>} arr
@@ -19,10 +19,10 @@ function ArrayManager(arr) {
 }
 
 /**
- * @returns {import("@components/PhotoList/CachedPager").PageManager<number>}
+ * @returns {import("@components/PhotoList/Pager").PageManager<number>}
  */
 function NumPageManager() {
-  /** @type {import("@components/PhotoList/CachedPager").PageManager<number>} */
+  /** @type {import("@components/PhotoList/Pager").PageManager<number>} */
   let pl = {
     load: (pageNum, pageSize, next) => Promise.resolve(100),
     unload: (e) => {},
@@ -35,12 +35,12 @@ function NumPageManager() {
 describe("next page", () => {
   /** @type {Array<number>} */
   let arr;
-  /** @type {CachedPager<number>} */
+  /** @type {Pager<number>} */
   let pager;
 
   beforeEach(() => {
     arr = new Array();
-    pager = new CachedPager({
+    pager = new Pager({
       elementLength: 62,
       elementMgr: ArrayManager(arr),
       pageMgr: NumPageManager(),
@@ -76,12 +76,12 @@ describe("next page", () => {
 describe("previous page", () => {
   /** @type {Array<number>} */
   let arr;
-  /** @type {CachedPager<number>} */
+  /** @type {Pager<number>} */
   let pager;
 
   beforeEach(() => {
     arr = new Array();
-    pager = new CachedPager({
+    pager = new Pager({
       elementLength: 62,
       elementMgr: ArrayManager(arr),
       pageMgr: NumPageManager(),
