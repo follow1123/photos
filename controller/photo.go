@@ -156,7 +156,12 @@ func (pc *PhotoController) PreviewOriginalPhoto(c *gin.Context) {
 		return
 	}
 	defer rc.Close()
-	extraHeaders := make(map[string]string, 1)
+	extraHeaders := make(map[string]string, 3)
+
+	if isCompressed {
+		extraHeaders["Cache-Control"] = "public, max-age=60"
+		extraHeaders["Expires"] = time.Now().Add(1 * time.Minute).Format(http.TimeFormat)
+	}
 
 	if isDownload {
 		t := time.Now()
