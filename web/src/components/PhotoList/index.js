@@ -5,6 +5,8 @@ import stylesText from "@components/PhotoList/styles.css?raw";
 
 import Photo from "@components/Photo";
 import InfiniteWindowList from "@components/PhotoList/InfiniteWindowList";
+import { eventBus } from "@/eventbus";
+import Condition from "@components/SearchBar/Condition";
 
 /** @typedef {import('@/eventbus').EventHandler} EventHandler */
 
@@ -32,6 +34,9 @@ export default class PhotoList extends HTMLElement {
 
   /** @type {InfiniteWindowList<Photo>} */
   #windowList;
+
+  /** @type {Condition | null} */
+  #condition = null;
 
   constructor() {
     super();
@@ -70,14 +75,33 @@ export default class PhotoList extends HTMLElement {
 
   connectedCallback() {
     this.#windowList.init();
+    eventBus.on("query", this.#handleQuery, this);
+  }
+
+  disconnectedCallback() {
+    eventBus.off("query");
+  }
+
+  /**
+   * @param {Condition} data
+   */
+  #handleQuery(data) {
+    this.#condition = data;
+    this.#windowList.reset();
   }
 
   /** @type {import("@components/PhotoList/InfiniteWindowList").QueryElementsFn<Photo>} */
   async #handleLoadPage(pageNum, pageSize, next) {
-    return await fetch(
-      `http://localhost:8080/photo?pageNum=${pageNum}&pageSize=${pageSize}`,
+    return fetch(
+      `http://localhost:8080/photo?pageNum=${pageNum}&pageSize=${pageSize}${this.#condition ? this.#condition.build() : ""}`,
     )
-      .then((resp) => resp.json())
+      .then((resp) => {
+        if (resp.status !== 200) {
+          resp.json().then((data) => console.warn(data.message));
+          return Promise.reject();
+        }
+        return resp.json();
+      })
       .then((data) => {
         Array.from(data.list).forEach((item) => {
           let photo = next();

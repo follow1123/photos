@@ -98,25 +98,35 @@ export default class InfiniteWindowList {
     this.#load();
   }
 
+  reset() {
+    this.#root.innerHTML = "";
+    this.#counter = 0;
+    this.#pageNum = 0;
+    this.#total = null;
+    this.#load();
+  }
+
   async #load() {
     if (!this.#pageSize) throw new Error("loading size cannot be null");
     if (this.#total && this.#counter >= this.#total) return;
 
-    let total = await this.#manager.queryElement(
-      this.#pageNum,
-      this.#pageSize,
-      this.#newElement.bind(this),
-    );
-    if (!this.#total) {
-      this.#total = total;
-    } else if (this.#total != total) {
-      console.warn("data changed in this condition");
-      this.#total = total;
-    }
-    this.#observedMap.set(
-      "end",
-      /** @type {HTMLElement} */ (this.#root.lastElementChild),
-    );
+    try {
+      let total = await this.#manager.queryElement(
+        this.#pageNum,
+        this.#pageSize,
+        this.#newElement.bind(this),
+      );
+      if (!this.#total) {
+        this.#total = total;
+      } else if (this.#total != total) {
+        console.warn("data changed in this condition");
+        this.#total = total;
+      }
+      this.#observedMap.set(
+        "end",
+        /** @type {HTMLElement} */ (this.#root.lastElementChild),
+      );
+    } catch (e) {}
   }
 
   /** @returns {E} */
