@@ -17,13 +17,17 @@ style.textContent = stylesText;
 template.content.prepend(style);
 
 export default class Photo extends HTMLElement {
-  static observedAttributes = ["photo-id"];
-
   /** @type {string | null} */
-  photoId = null;
+  #photoId = null;
+  /** @type {string | null} */
+  #originalUri = null;
+  /** @type {string | null} */
+  #compressedUri = null;
+  /** @type {boolean} */
+  #loading = false;
 
   /** @type {HTMLImageElement} */
-  img;
+  #img;
 
   constructor() {
     super();
@@ -32,63 +36,41 @@ export default class Photo extends HTMLElement {
     shadow.append(template.content.cloneNode(true));
 
     let imgEle = shadow.querySelector("img");
-    if (!(imgEle instanceof HTMLImageElement)) {
-      throw new Error("invalid template");
-    }
+    if (!imgEle) throw new Error("invalid template");
 
-    this.img = imgEle;
-
-    this.img.addEventListener("click", this.dispatchPreviewEvent.bind(this));
+    this.#img = imgEle;
+    this.#img.src = imgLoadingUri;
+    this.#img.addEventListener("click", this.#dispatchPreviewEvent.bind(this));
   }
 
-  connectedCallback() {
-    this.setDefaultSrc();
+  get photoId() {
+    if (!this.#photoId) throw new Error("no photo id");
+    return this.#photoId;
   }
 
-  disconnectedCallback() {
-    this.removeAttribute("photo-id");
+  set photoId(value) {
+    this.#photoId = value;
+    this.#originalUri = `http://localhost:8080/photo/${value}/preview/original`;
+    this.#compressedUri = `http://localhost:8080/photo/${value}/preview/compressed`;
   }
 
-  /**
-   * @param {string} name
-   * @param {string | null} oldValue
-   * @param {string | null} newValue
-   */
-  attributeChangedCallback(name, oldValue, newValue) {
-    if (name === "photo-id") {
-      if (newValue === null || newValue === "") {
-        this.photoId = null;
-        this.clearImgSrc();
-      } else {
-        this.photoId = newValue;
-        this.setImgSrc();
-      }
-    }
+  unload() {
+    this.#img.src = imgLoadingUri;
+    this.#loading = false;
   }
 
-  setDefaultSrc() {
-    this.img.src = imgLoadingUri;
+  load() {
+    if (!this.#compressedUri) throw new Error("compressed uri not exists");
+    this.#img.src = this.#compressedUri;
+    this.#loading = true;
   }
 
-  setImgSrc() {
-    this.img.src = `http://localhost:8080/photo/${this.photoId}/preview/compressed`;
-  }
-
-  clearImgSrc() {
-    this.setDefaultSrc();
-    let ce = new CustomEvent("clear");
-    this.dispatchEvent(ce);
-  }
-
-  /**
-   * @param {Event} e
-   */
-  dispatchPreviewEvent(e) {
+  /** @type {EventListener} */
+  #dispatchPreviewEvent(e) {
     e.stopPropagation();
+    if (!this.#loading) return;
     let ce = new CustomEvent("preview", {
-      detail: {
-        originalUri: `http://localhost:8080/photo/${this.photoId}/preview/original`,
-      },
+      detail: { uri: this.#originalUri },
     });
     this.dispatchEvent(ce);
   }
